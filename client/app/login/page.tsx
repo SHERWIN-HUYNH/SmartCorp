@@ -1,0 +1,108 @@
+import Link from 'next/link';
+import { Eye, Building, Database } from 'lucide-react';
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8">
+        
+        {/* Header / Logo */}
+        <div className="mb-8 text-center flex flex-col items-center">
+          <Link href="/" className="flex items-center gap-3 mb-8">
+            <div className="bg-[#0F172A] p-2 rounded-xl">
+              <Database className="w-7 h-7 text-white" />
+            </div>
+            <span className="font-bold text-2xl text-[#0F172A]">SmartCorp Oracle</span>
+          </Link>
+          <h1 className="text-3xl sm:text-4xl font-bold text-[#0F172A] mb-3">
+            Welcome back!
+          </h1>
+          <p className="text-slate-500 text-sm sm:text-base">
+            Please login to your account.
+          </p>
+        </div>
+
+        <div className="bg-white w-full max-w-[480px] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 sm:p-10">
+          <form className="space-y-6">
+            {/* Email Address */}
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A] mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="block w-full px-4 py-3.5 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-[#0F172A]">
+                  Password
+                </label>
+                <Link href="#" className="text-sm font-medium text-slate-500 hover:text-[#0F172A] underline decoration-slate-300 underline-offset-4 transition-colors">
+                  Forgot Password?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  type="password"
+                  placeholder="Enter your password"
+                  className="block w-full pl-4 pr-11 py-3.5 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+                />
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center cursor-pointer">
+                  <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600 transition-colors" />
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-[#0F172A] hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
+              >
+                Sign In
+              </button>
+            </div>
+          </form>
+
+          {/* Divider */}
+          <div className="mt-8 relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-white px-4 text-slate-500">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          {/* SSO Login */}
+          <div className="mt-8">
+            <button className="w-full flex items-center justify-center gap-2 py-3.5 px-4 border border-slate-300 rounded-xl shadow-sm bg-white text-sm font-semibold text-[#0F172A] hover:bg-slate-50 transition-colors">
+              <Building className="w-4 h-4" />
+              SSO / Enterprise Login
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-10 text-center text-sm text-slate-500">
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="font-bold text-[#0F172A] hover:underline underline-offset-4">
+            Sign up
+          </Link>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="py-8 text-center text-xs text-slate-400">
+        © 2024 SmartCorp Oracle. All rights reserved.
+      </footer>
+    </div>
+  );
+}
