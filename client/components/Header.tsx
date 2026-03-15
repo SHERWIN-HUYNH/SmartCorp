@@ -15,9 +15,9 @@ export default function Header() {
           <li><Link href="#feedback" className="hover:text-white transition">Feedback</Link></li>
         </ul>
         <div className="flex items-center">
-          <button className="bg-white text-brand-navy px-6 py-2.5 rounded-xl font-bold hover:bg-gray-100 transition shadow-sm">
+          <Link href="/login" className="bg-white text-brand-navy px-6 py-2.5 rounded-xl font-bold hover:bg-gray-100 transition shadow-sm">
             Get Started
-          </button>
+          </Link >
         </div>
       </nav>
     </header>

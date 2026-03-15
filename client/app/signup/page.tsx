@@ -1,7 +1,86 @@
+"use client";
+
 import Link from 'next/link';
+import { FormEvent, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { User, Mail, Lock, LayoutGrid } from 'lucide-react';
 
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
 export default function SignupPage() {
+  const router = useRouter();
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api';
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const passwordsMatch = useMemo(() => {
+    if (!password && !confirmPassword) {
+      return true;
+    }
+    return password === confirmPassword;
+  }, [password, confirmPassword]);
+
+  const isStrongPassword = useMemo(() => {
+    if (!password) {
+      return true;
+    }
+    return STRONG_PASSWORD_REGEX.test(password);
+  }, [password]);
+
+  const showPasswordMismatch = isSubmitted && !passwordsMatch;
+  const showWeakPassword = isSubmitted && !isStrongPassword;
+  const showTermsError = isSubmitted && !acceptedTerms;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    setIsSubmitted(true);
+    setErrorMessage(null);
+
+    if (!passwordsMatch || !isStrongPassword || !acceptedTerms) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const detail = payload?.detail;
+        if (typeof detail === 'string') {
+          throw new Error(detail);
+        }
+        throw new Error('Signup failed. Please try again.');
+      }
+
+      router.push('/chatbot');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unexpected error happened.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans relative">
       {/* Header / Logo */}
@@ -26,7 +105,7 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <form className="space-y-5">
+          <form className="space-y-5" onSubmit={handleSubmit}>
             {/* Full Name */}
             <div>
               <label className="block text-sm font-medium text-[#0F172A] mb-1.5">
@@ -39,7 +118,10 @@ export default function SignupPage() {
                 <input
                   type="text"
                   placeholder="Enter your full name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
                   className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+                  required
                 />
               </div>
             </div>
@@ -56,7 +138,10 @@ export default function SignupPage() {
                 <input
                   type="email"
                   placeholder="name@company.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+                  required
                 />
               </div>
             </div>
@@ -73,9 +158,46 @@ export default function SignupPage() {
                 <input
                   type="password"
                   placeholder="Min. 8 characters"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                   className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+                  required
                 />
               </div>
+              {showWeakPassword && (
+                <p className="mt-1.5 text-sm text-red-600">
+                  Password must include uppercase, lowercase, number, and special character.
+                </p>
+              )}
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A] mb-1.5">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="password"
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className={`block w-full pl-11 pr-4 py-3 border rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-shadow ${
+                    showPasswordMismatch
+                      ? 'border-red-300 focus:ring-red-500'
+                      : 'border-slate-200 focus:ring-slate-900'
+                  }`}
+                  required
+                />
+              </div>
+              {showPasswordMismatch && (
+                <p className="mt-1.5 text-sm text-red-600">
+                  Password and confirm password must match.
+                </p>
+              )}
             </div>
 
             {/* Terms */}
@@ -84,6 +206,8 @@ export default function SignupPage() {
                 <input
                   id="terms"
                   type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
                   className="w-4 h-4 border border-slate-300 rounded bg-white checked:bg-[#0F172A] checked:border-[#0F172A] focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 transition-colors cursor-pointer"
                 />
               </div>
@@ -91,14 +215,22 @@ export default function SignupPage() {
                 I agree to the <Link href="#" className="text-[#EA580C] hover:underline">Terms of Service</Link> and <Link href="#" className="text-[#EA580C] hover:underline">Privacy Policy</Link>.
               </label>
             </div>
+            {showTermsError && (
+              <p className="-mt-2 text-sm text-red-600">You must accept Terms of Service and Privacy Policy.</p>
+            )}
+
+            {errorMessage && (
+              <p className="text-sm text-red-600">{errorMessage}</p>
+            )}
 
             {/* Submit Button */}
             <div className="pt-2">
               <button
                 type="submit"
+                disabled={isLoading}
                 className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-[#0F172A] hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
               >
-                Create Account
+                {isLoading ? 'Creating account...' : 'Create Account'}
               </button>
             </div>
           </form>

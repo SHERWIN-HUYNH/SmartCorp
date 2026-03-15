@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function CTA() {
   return (
     <section className="bg-brand-deepNavy py-24 px-6 text-center relative overflow-hidden">
@@ -7,9 +9,9 @@ export default function CTA() {
         <h2 className="text-white text-3xl md:text-5xl font-bold mb-8 leading-tight">
           Ready to upgrade your internal workflow?
         </h2>
-        <button className="bg-white text-brand-navy px-10 py-5 rounded-xl font-bold text-xl hover:bg-gray-100 transition shadow-xl">
+        <Link href="/signup" className="bg-white text-brand-navy px-10 py-5 rounded-xl font-bold text-xl hover:bg-gray-100 transition shadow-xl">
           Create Free Account
-        </button>
+        </Link>
       </div>
     </section>
   );
