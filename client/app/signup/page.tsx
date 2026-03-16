@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Mail, Lock, LayoutGrid } from 'lucide-react';
+import { signup } from '@/lib/auth-api';
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -51,28 +52,7 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        const detail = payload?.detail;
-        if (typeof detail === 'string') {
-          throw new Error(detail);
-        }
-        throw new Error('Signup failed. Please try again.');
-      }
-
+      await signup({name, email, password});
       router.push('/chatbot');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unexpected error happened.');
