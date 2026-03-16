@@ -75,7 +75,7 @@ def create_user(user_data: SignupRequest, db: Session) -> User:
 
 def authenticate_user(email: str, password: str, db: Session) -> User | None:
     user = get_user_by_email(email, db)
-    if not user:
+    if not user or user.state != "active":
         return None
     if not verify_password(password, user.password_hash):
         return None
