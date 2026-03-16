@@ -1,7 +1,44 @@
+"use client";
+
 import Link from 'next/link';
-import { Eye, Building, Database } from 'lucide-react';
+import { Eye, EyeOff, Building, Database } from 'lucide-react';
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+import { AuthApiError, login } from '@/lib/auth-api';
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+    setIsLoading(true);
+
+    try {
+      if (!email.trim() || !password.trim()) {
+        setErrorMessage('Email and password are required.');
+        return;
+      }
+      await login(email, password);
+      router.push('/chatbot');
+    } catch (error) {
+      if (error instanceof AuthApiError) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage('Unexpected error happened. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
       {/* Main Content */}
@@ -24,7 +61,7 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white w-full max-w-[480px] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 sm:p-10">
-          <form className="space-y-6">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             {/* Email Address */}
             <div>
               <label className="block text-sm font-medium text-[#0F172A] mb-2">
@@ -33,7 +70,10 @@ export default function LoginPage() {
               <input
                 type="email"
                 placeholder="Enter your email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 className="block w-full px-4 py-3.5 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+                required
               />
             </div>
 
@@ -49,23 +89,40 @@ export default function LoginPage() {
               </div>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                   className="block w-full pl-4 pr-11 py-3.5 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow"
+                  required
                 />
-                <div className="absolute inset-y-0 right-0 pr-4 flex items-center cursor-pointer">
-                  <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600 transition-colors" />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center cursor-pointer"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600 transition-colors" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600 transition-colors" />
+                  )}
+                </button>
               </div>
             </div>
+
+            {errorMessage && (
+              <p className="text-sm text-red-600">{errorMessage}</p>
+            )}
 
             {/* Submit Button */}
             <div className="pt-2">
               <button
                 type="submit"
+                disabled={isLoading}
                 className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-[#0F172A] hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
               >
-                Sign In
+                {isLoading ? 'Signing in...' : 'Sign In'}
               </button>
             </div>
           </form>
