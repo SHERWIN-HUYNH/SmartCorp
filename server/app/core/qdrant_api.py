@@ -1,0 +1,150 @@
+import requests
+from typing import List, Optional
+
+from app.schemas.qdrant import (
+    DeletePointsRequest,
+    HybridSearchRequest,
+    Point,
+)
+
+
+class QdrantAPI:
+    def __init__(self, host: str, collection: str):
+        self.host = host
+        self.collection = collection
+
+    # ------------------------------ Collection ------------------------------
+
+    def create_collection(self, vector_size: int = 1536):
+        url = f"{self.host}/collections/{self.collection}"
+        payload = {
+            "vectors": {
+                "dense": {
+                    "size": vector_size,
+                    "distance": "Cosine"
+                }
+            },
+            "sparse_vectors": {
+                "sparse": {}
+            }
+        }
+        return requests.put(url, json=payload).json()
+
+    def delete_collection(self):
+        url = f"{self.host}/collections/{self.collection}"
+        return requests.delete(url).json()
+
+    def get_collection_info(self):
+        url = f"{self.host}/collections/{self.collection}"
+        return requests.get(url).json()
+
+    def create_snapshot(self):
+        url = f"{self.host}/collections/{self.collection}/snapshots"
+        return requests.post(url).json()
+
+    # ------------------------------ Points ------------------------------
+
+    def upsert_points(self, points: List[Point]):
+        url = f"{self.host}/collections/{self.collection}/points"
+
+        payload = {
+            "points": [
+                {
+                    "id": point.id,
+                    "vector": {
+                        "dense": point.vector.dense,
+                        "sparse": {
+                            "indices": point.vector.sparse.indices,
+                            "values": point.vector.sparse.values,
+                        }
+                    },
+                    "payload": point.payload.model_dump(mode="json")
+                }
+                for point in points
+            ]
+        }
+
+        return requests.put(url, json=payload).json()
+
+    def delete_points(self, body: DeletePointsRequest):
+        url = f"{self.host}/collections/{self.collection}/points/delete"
+        return requests.post(url, json={"points": body.ids}).json()
+
+    def count_points(self):
+        url = f"{self.host}/collections/{self.collection}/points/count"
+        return requests.post(url, json={}).json()
+
+    # ------------------------------ Search ------------------------------
+
+    def hybrid_search(self, body: HybridSearchRequest):
+        url = f"{self.host}/collections/{self.collection}/points/query"
+
+        query = {
+            "prefetch": [
+                {
+                    "query": {
+                        "indices": body.sparse_indices,
+                        "values": body.sparse_values,
+                    },
+                    "using": "sparse",
+                    "limit": body.sparse_limit,
+                },
+                {
+                    "query": body.dense_vector,
+                    "using": "dense",
+                    "limit": body.dense_limit,
+                }
+            ],
+            "query": {"fusion": "rrf"},
+            "limit": body.limit,
+            "with_payload": True,
+        }
+
+        if body.role_allowed:
+            query["filter"] = {
+                "must": [
+                    {
+                        "key": "role_allowed",
+                        "match": {"any": body.role_allowed}
+                    }
+                ]
+            }
+
+        return requests.post(url, json=query).json()
+
+    def scroll(self, filter_query: Optional[dict] = None, limit: int = 10):
+        url = f"{self.host}/collections/{self.collection}/points/scroll"
+
+        payload = {"limit": limit}
+
+        if filter_query:
+            payload["filter"] = filter_query
+
+        return requests.post(url, json=payload).json()
+
+    def recommend(self, positive_ids: List[str], limit: int = 5):
+        url = f"{self.host}/collections/{self.collection}/points/recommend"
+
+        payload = {
+            "positive": positive_ids,
+            "limit": limit,
+            "with_payload": True,
+        }
+
+        return requests.post(url, json=payload).json()
+
+    # ------------------------------ Payload ------------------------------
+
+    def create_payload_index(self, field_name: str, field_type: str = "keyword"):
+        url = f"{self.host}/collections/{self.collection}/index"
+
+        payload = {
+            "field_name": field_name,
+            "field_schema": field_type,
+        }
+
+        return requests.put(url, json=payload).json()
+    
+    def delete_payload_index(self, field_name: str):
+        url = f"{self.host}/collections/{self.collection}/index/{field_name}"
+        return requests.delete(url).json()
