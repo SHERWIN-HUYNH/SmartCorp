@@ -18,6 +18,20 @@ export interface SignupPayload {
   name: string;
   password: string;
 }
+
+export interface UploadDocumentsPayload {
+  files: File[];
+  processCode: string;
+  version: string;
+  effectiveDate: string;
+  roles: string[];
+  useLlamaParse: boolean;
+}
+
+export interface UploadDocumentsResponse {
+  message?: string;
+}
+
 export class AuthApiError extends Error {
   status: number;
 
@@ -74,6 +88,39 @@ export async function signup(payload: SignupPayload): Promise<LoginResponse> {
   }
 
   return response.json() as Promise<LoginResponse>;
+}
+
+export async function uploadDocuments(payload: UploadDocumentsPayload): Promise<UploadDocumentsResponse> {
+  const formData = new FormData();
+
+  payload.files.forEach((file) => {
+    formData.append('files', file);
+  });
+  formData.append('process_code', payload.processCode);
+  formData.append('version', payload.version);
+  formData.append('effective_date', payload.effectiveDate);
+  payload.roles.forEach((role) => {
+    formData.append('roles', role);
+  });
+  formData.append('use_llamaparse', String(payload.useLlamaParse));
+  for (const [key, value] of formData.entries()) {
+    console.log(key, value);
+  }
+  const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    throw new AuthApiError(
+      getErrorMessage(errorPayload, 'Upload failed. Please try again.'),
+      response.status,
+    );
+  }
+
+  return response.json().catch(() => ({ message: 'Upload submitted successfully.' })) as Promise<UploadDocumentsResponse>;
 }
 
 

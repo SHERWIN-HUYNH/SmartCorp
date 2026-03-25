@@ -37,3 +37,40 @@ export interface Source {
   type: 'pdf' | 'table' | 'link';
   url: string;
 }
+
+import { LucideIcon } from 'lucide-react';
+
+export interface KpiMetric {
+  id: string;
+  title: string;
+  value: string | number;
+  changeLabel?: string;
+  changeType?: 'positive' | 'warning' | 'neutral' | 'status';
+  icon: LucideIcon;
+  iconWrapperClass: string;
+  iconClass: string;
+  statusText?: string;
+}
+
+export interface DocumentStat {
+  id: string;
+  title: string;
+  tags: string[];
+  icon: LucideIcon;
+  iconWrapperClass: string;
+  iconClass: string;
+  views: number;
+  trendPercentage: number;
+  trendType: 'up' | 'down' | 'steady';
+  sparklinePath: string;
+}
+
+export interface ActivityUpdate {
+  id: string;
+  title: string;
+  author: string;
+  time: string;
+  icon: LucideIcon;
+  iconWrapperClass: string;
+  iconClass: string;
+}
