@@ -1,3 +1,4 @@
+'use client';
 import { RoleNode } from '@/types/role';
 import { PlusCircle, ChevronRight, Users, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';

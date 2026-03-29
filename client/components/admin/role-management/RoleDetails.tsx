@@ -1,4 +1,5 @@
 
+'use client';
 import { RoleNode } from '@/types/role';
 import { ChevronRight, Edit2, UserSearch, UserPlus, ArrowRight, Search, ChevronDown, ChevronLeft, FileText, Shield, BookOpen, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
