@@ -11,7 +11,7 @@ client = OpenAI(api_key=OPENAI_KEY)
 
 res = client.responses.create(
     model="gpt-5-mini",
-    input="Hello",
+    input="which number is behind 2 ",
 )
 
 print(res)

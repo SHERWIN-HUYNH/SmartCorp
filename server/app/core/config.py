@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "http://localhost:6333"
     QDRANT_COLLECTION: str = "SmartCorp"
 
+    CLOUDFLARE_ACCOUNT_ID: str | None = None
+    CLOUDFLARE_ACCESS_KEY: str | None = None
+    CLOUDFLARE_SECRET_KEY: str | None = None
+    CLOUDFLARE_BUCKET_NAME: str | None = None
+    CLOUDFLARE_PUBLIC_URL: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

@@ -74,16 +74,8 @@ class QdrantService:
             type=chunk_type,
             parent_id=str(chunk.get("parent_id", "")),
             order=int(chunk.get("order", 0) or 0),
-            table_url=(
-                chunk.get("raw_table")[0]
-                if chunk_type == ChunkType.TABLE
-                else None
-            ),
-            image_url=(
-                chunk.get("image_b64")[0]
-                if chunk_type == ChunkType.IMAGE
-                else None
-            ),
+            table_url=chunk.get("table_url") if chunk_type == ChunkType.TABLE else None,
+            image_url=chunk.get("image_url") if chunk_type == ChunkType.IMAGE else None,
         )
 
         vector = Vector(
