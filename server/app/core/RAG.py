@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Optional
 from openai import OpenAI
+from fastembed import SparseTextEmbedding
 
 from app.services.ingestion_service import IngestionService
 from app.services.embedding_service import EmbeddingService
@@ -9,11 +10,15 @@ class RAG:
     def __init__(
         self,
         ingestion_service: IngestionService,
+        _sparse_model: SparseTextEmbedding,
         embedding_service: EmbeddingService,
         qdrant_service,
         client: OpenAI,
         verbose=True,
     ):
+        # BM25 model
+        self.sparse_model = _sparse_model
+
         self.ingestion_service = ingestion_service
         self.embedding = embedding_service
         self.qdrant = qdrant_service
@@ -24,7 +29,7 @@ class RAG:
         self.ingestion_service.ingest_pdf(file_path, document_id, role_allowed)
 
 
-    def search(self, query: str, top_k=5):
+    def search(self, query: str, top_k=5, role_allowed: Optional[List[str]] = None):
         try:
             dense = self.embedding.embed_dense([query])[0]
 
@@ -32,15 +37,14 @@ class RAG:
                 print("Dense embedding failed")
                 return {}
 
-            sparse = self.embedding.embed_sparse([query])[0]
-            sparse_indices = getattr(sparse, "indices", []) or []
-            sparse_values = getattr(sparse, "values", []) or []
+            sparse = list(self.sparse_model.embed([query]))[0]
 
             return self.qdrant.hybrid_search(
                 dense_vector=dense,
-                sparse_indices=sparse_indices,
-                sparse_values=sparse_values,
-                limit=top_k
+                sparse_indices=sparse.indices.tolist(),
+                sparse_values=sparse.values.tolist(),
+                limit=top_k,
+                role_allowed=role_allowed,
             )
 
         except Exception as e:
@@ -86,7 +90,7 @@ class RAG:
             return "Error generating answer. Please try again."
 
 
-    def ask(self, query: str, top_k=5):
-        results = self.search(query, top_k=top_k)
+    def ask(self, query: str, top_k=5, role_allowed: Optional[List[str]] = None):
+        results = self.search(query, top_k=top_k, role_allowed=role_allowed)
         answer = self.generate_answer(query, results)
         return answer, results

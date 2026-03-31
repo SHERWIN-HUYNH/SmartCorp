@@ -1,12 +1,13 @@
-from typing import List
 from types import SimpleNamespace
+from typing import List, Optional
 from openai import OpenAI
+from fastembed import SparseTextEmbedding
 
 
 class EmbeddingService:
-    def __init__(self, client: OpenAI, sparse_model=None):
+    def __init__(self, client: OpenAI, _sparse_model: Optional[SparseTextEmbedding]):
         self.client = client
-        self.sparse_model = sparse_model
+        self.sparse_model = _sparse_model
         
 
     def embed_dense(self, texts: List[str], batch_size=50):
@@ -34,4 +35,5 @@ class EmbeddingService:
     def embed_sparse(self, texts: List[str]):
         if self.sparse_model is None:
             return [SimpleNamespace(indices=[], values=[]) for _ in texts]
+
         return list(self.sparse_model.embed(texts))

@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import List
 
 from app.services.chunking_service import ChunkingService
@@ -37,14 +38,24 @@ class IngestionService:
 
         points = []
         for i, chunk in enumerate(all_chunks):
-            sparse = sparse_embeddings[i]
+            sparse = sparse_embeddings[i] or SimpleNamespace(indices=[], values=[])
+            sparse_indices = (
+                sparse.indices.tolist()
+                if hasattr(sparse.indices, "tolist")
+                else list(sparse.indices)
+            )
+            sparse_values = (
+                sparse.values.tolist()
+                if hasattr(sparse.values, "tolist")
+                else list(sparse.values)
+            )
 
             point = self.qdrant.chunk_to_point(
                 chunk,
                 document_id,
                 dense_embeddings[i],
-                sparse.indices.tolist(),
-                sparse.values.tolist(),
+                sparse_indices,
+                sparse_values,
                 role_allowed,
             )
 
