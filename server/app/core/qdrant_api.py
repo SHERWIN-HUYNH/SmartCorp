@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.schemas.qdrant_schema import (
@@ -78,6 +79,7 @@ class QdrantAPI:
 
     def hybrid_search(self, body: HybridSearchRequest):
         url = f"{self.host}/collections/{self.collection}/points/query"
+        effective_at = body.effective_at or datetime.now(timezone.utc)
 
         query = {
             "prefetch": [
@@ -98,17 +100,27 @@ class QdrantAPI:
             "query": {"fusion": "rrf"},
             "limit": body.limit,
             "with_payload": True,
+            "filter": {
+                "must": [
+                    {
+                        "key": "is_active",
+                        "match": {"value": True}
+                    },
+                    {
+                        "key": "effective_date",
+                        "range": {"lte": effective_at.isoformat()}
+                    }
+                ]
+            },
         }
 
         if body.role_allowed:
-            query["filter"] = {
-                "must": [
-                    {
-                        "key": "role_allowed",
-                        "match": {"any": body.role_allowed}
-                    }
-                ]
-            }
+            query["filter"]["must"].append(
+                {
+                    "key": "role_allowed",
+                    "match": {"any": body.role_allowed}
+                }
+            )
 
         return requests.post(url, json=query).json()
 

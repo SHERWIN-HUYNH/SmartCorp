@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+from datetime import datetime, timezone
 
 from app.services.chunking_service import ChunkingService
 from app.services.embedding_service import EmbeddingService
@@ -20,7 +21,15 @@ class IngestionService:
         self.cloudflare = cloudflare_service
         self.verbose = verbose
 
-    def ingest_pdf(self, file_path: str, document_id: str, role_allowed: List[str]):
+    def ingest_pdf(
+        self,
+        file_path: str,
+        document_id: str,
+        role_allowed: List[str],
+        is_active: bool = True,
+        effective_date: Optional[datetime] = None,
+    ):
+        effective_date = effective_date or datetime.now(timezone.utc)
         elements = self.chunking_service.partition_document(file_path)
 
         chunks = self.chunking_service.create_chunks_by_title(elements)
@@ -68,6 +77,8 @@ class IngestionService:
                 sparse.indices.tolist(),
                 sparse.values.tolist(),
                 role_allowed,
+                is_active=is_active,
+                effective_date=effective_date,
             )
 
             points.append(point)

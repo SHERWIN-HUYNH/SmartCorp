@@ -21,14 +21,34 @@ class ChunkingService:
         """Extract elements from PDF using unstructured"""
         if self.verbose:
             print(f"Partitioning document: {file_path}")
-        
-        elements = partition_pdf(
-            filename=file_path,  # Path to your PDF file
-            strategy="hi_res", # Use the most accurate (but slower) processing method of extraction
-            infer_table_structure=True, # Keep tables as structured HTML, not jumbled text
-            extract_image_block_types=["Image"], # Grab images found in the PDF
-            extract_image_block_to_payload=True # Store images as base64 data you can actually use
-        )
+
+        try:
+            elements = partition_pdf(
+                filename=file_path,  # Path to your PDF file
+                strategy="hi_res", # Use the most accurate (but slower) processing method of extraction
+                infer_table_structure=True, # Keep tables as structured HTML, not jumbled text
+                extract_image_block_types=["Image"], # Grab images found in the PDF
+                extract_image_block_to_payload=True # Store images as base64 data you can actually use
+            )
+        except Exception as e:
+            # Fallback for environments where OCR dependencies (e.g. tesseract) are not installed.
+            error_text = str(e).lower()
+            is_ocr_dependency_error = (
+                e.__class__.__name__ == "TesseractNotFoundError"
+                or "tesseract is not installed" in error_text
+                or "no such file or directory" in error_text and "tesseract" in error_text
+            )
+
+            if not is_ocr_dependency_error:
+                raise
+
+            if self.verbose:
+                print("OCR dependency is missing, falling back to strategy='fast'.")
+
+            elements = partition_pdf(
+                filename=file_path,
+                strategy="fast",
+            )
 
         for element in elements:
             if hasattr(element, "text"):

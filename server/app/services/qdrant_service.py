@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core.config import get_settings
@@ -55,6 +56,8 @@ class QdrantService:
         sparse_indices: List[int],
         sparse_values: List[float],
         role_allowed: Optional[List[str]] = None,
+        is_active: bool = True,
+        effective_date: Optional[datetime] = None,
     ) -> Point:
         """Chuyển chunk thành Point theo qdrant_schema."""
         if role_allowed is None:
@@ -68,6 +71,8 @@ class QdrantService:
 
         payload = Payload(
             document_id=document_id,
+            is_active=is_active,
+            effective_date=effective_date or datetime.now(timezone.utc),
             page=int(chunk.get("page", 0) or 0),
             role_allowed=role_allowed,
             content=str(chunk.get("text", "")),
@@ -100,6 +105,7 @@ class QdrantService:
         sparse_limit: int = 20,
         limit: int = 10,
         role_allowed: Optional[List[str]] = None,
+        effective_at: Optional[datetime] = None,
     ):
         body = HybridSearchRequest(
             dense_vector=dense_vector,
@@ -109,6 +115,7 @@ class QdrantService:
             sparse_limit=sparse_limit,
             limit=limit,
             role_allowed=role_allowed,
+            effective_at=effective_at,
         )
         return self.qdrant.hybrid_search(body)
 

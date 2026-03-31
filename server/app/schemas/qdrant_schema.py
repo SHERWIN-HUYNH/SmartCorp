@@ -28,6 +28,9 @@ class Vector(BaseModel):
 
 class Payload(BaseModel):
     document_id: str
+    is_active: bool = True
+    effective_date: Optional[datetime] = None
+    
     page: int
     role_allowed: List[str]
 
@@ -57,6 +60,7 @@ class HybridSearchRequest(BaseModel):
     sparse_limit: int = 20
     limit: int = 10
     role_allowed: Optional[List[str]] = None
+    effective_at: Optional[datetime] = None
 
 
 class DeletePointsRequest(BaseModel):
