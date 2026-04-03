@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     COOKIE_DOMAIN: str | None = None
     CORS_ORIGINS: str = "http://localhost:3000"
+    QDRANT_HOST: str = "http://localhost:6333"
+    QDRANT_COLLECTION: str = "SmartCorp"
 
     @property
     def cors_origins_list(self) -> list[str]:
