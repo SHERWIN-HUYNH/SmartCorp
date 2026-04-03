@@ -1,0 +1,10 @@
+services:
+  tesseract:
+    build:
+      context: .
+      dockerfile: Dockerfile.tesseract
+    image: smartcorp-tesseract:latest
+    working_dir: /work
+    volumes:
+      - ./:/work
+    entrypoint: ["tesseract"]
