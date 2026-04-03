@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.services.qdrant_service import QdrantService, get_qdrant_service
+from app.core.dependencies import get_qdrant_service
+from app.services.qdrant_service import QdrantService
 from app.schemas.qdrant_schema import (
     Point,
     HybridSearchRequest,

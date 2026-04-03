@@ -26,7 +26,9 @@ class RAG:
         self.verbose = verbose
 
     def ingestion_pdf(self, file_path, document_id: str, role_allowed: List[str]):
-        self.ingestion_service.ingest_pdf(file_path, document_id, role_allowed)
+        chunks = self.ingestion_service.ingest_pdf(file_path, document_id, role_allowed)
+
+        return chunks
 
 
     def search(self, query: str, top_k=5, role_allowed: Optional[List[str]] = None):

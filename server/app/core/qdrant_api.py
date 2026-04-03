@@ -96,29 +96,48 @@ class QdrantAPI:
                 }
             ],
             "query": {"fusion": "rrf"},
+            "filter": {},
+            "sort": [{"key": "upload_date", "order": "desc"}],
             "limit": body.limit,
             "with_payload": True,
         }
 
+        active_filter = {
+            "key": "is_active",
+            "match": {"value": True}
+        }
+
+        must_filters = [active_filter]
         if body.role_allowed:
-            query["filter"] = {
-                "must": [
-                    {
-                        "key": "role_allowed",
-                        "match": {"any": body.role_allowed}
-                    }
-                ]
-            }
+            must_filters.append(
+                {
+                    "key": "role_allowed",
+                    "match": {"any": body.role_allowed}
+                }
+            )
+
+        query["filter"] = {"must": must_filters}
 
         return requests.post(url, json=query).json()
 
     def scroll(self, filter_query: Optional[dict] = None, limit: int = 10):
         url = f"{self.host}/collections/{self.collection}/points/scroll"
 
-        payload = {"limit": limit}
+        payload = {"limit": limit, "sort": [{"key": "upload_date", "order": "desc"}]}
+
+        active_filter = {
+            "key": "is_active",
+            "match": {"value": True}
+        }
 
         if filter_query:
+            if "must" in filter_query:
+                filter_query["must"].append(active_filter)
+            else:
+                filter_query = {"must": [filter_query, active_filter]}
             payload["filter"] = filter_query
+        else:
+            payload["filter"] = {"must": [active_filter]}
 
         return requests.post(url, json=payload).json()
 

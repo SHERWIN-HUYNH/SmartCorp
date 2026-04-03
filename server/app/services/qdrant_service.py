@@ -1,18 +1,11 @@
-import uuid
 from typing import List, Optional
 
-from app.core.config import get_settings
 from app.core.qdrant_api import QdrantAPI
 from app.schemas.qdrant_schema import (
     DeletePointsRequest,
     HybridSearchRequest,
     Point,
-    ChunkType,
-    Vector,
-    SparseVector,
-    Payload
 )
-settings = get_settings()
 
 
 class QdrantService:
@@ -47,7 +40,7 @@ class QdrantService:
     def count_points(self):
         return self.qdrant.count_points()
     
-    def chunk_to_point(
+    def build_point_from_chunk(
         self,
         chunk: dict,
         document_id: str,
@@ -55,46 +48,16 @@ class QdrantService:
         sparse_indices: List[int],
         sparse_values: List[float],
         role_allowed: Optional[List[str]] = None,
+        upload_date: Optional[int] = None,
     ) -> Point:
-        """Chuyển chunk thành Point theo qdrant_schema."""
-        if role_allowed is None:
-            role_allowed = ["general"]
-
-        chunk_type_value = chunk.get("type", ChunkType.TEXT.value)
-        try:
-            chunk_type = ChunkType(chunk_type_value)
-        except ValueError:
-            chunk_type = ChunkType.TEXT
-
-        payload = Payload(
+        return Point.from_chunk(
+            chunk=chunk,
             document_id=document_id,
-            page=int(chunk.get("page", 0) or 0),
+            dense_vector=dense_vector,
+            sparse_indices=sparse_indices,
+            sparse_values=sparse_values,
             role_allowed=role_allowed,
-            content=str(chunk.get("text", "")),
-            type=chunk_type,
-            parent_id=str(chunk.get("parent_id", "")),
-            order=int(chunk.get("order", 0) or 0),
-            table_url=(
-                chunk.get("raw_table")[0]
-                if chunk_type == ChunkType.TABLE
-                else None
-            ),
-            image_url=(
-                chunk.get("image_b64")[0]
-                if chunk_type == ChunkType.IMAGE
-                else None
-            ),
-        )
-
-        vector = Vector(
-            dense=dense_vector,
-            sparse=SparseVector(indices=sparse_indices, values=sparse_values),
-        )
-
-        return Point(
-            id=str(uuid.uuid4()),
-            vector=vector,
-            payload=payload,
+            upload_date=upload_date,
         )
 
     # -------- Search --------
@@ -130,11 +93,3 @@ class QdrantService:
 
     def create_payload_index(self, field_name: str, field_type: str = "keyword"):
         return self.qdrant.create_payload_index(field_name, field_type)
-
-
-# Dependency Injection
-def get_qdrant_service() -> QdrantService:
-    return QdrantService(
-        host=settings.QDRANT_HOST,
-        collection=settings.QDRANT_COLLECTION,
-    )

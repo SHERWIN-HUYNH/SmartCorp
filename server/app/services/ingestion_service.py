@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 from typing import List
 
@@ -27,6 +28,7 @@ class IngestionService:
         all_chunks = self.chunking_service.split_chunks(processed_chunks)
 
         texts = [chunk.get('text', '') for chunk in all_chunks]
+        upload_date = int(datetime.utcnow().timestamp())
 
         try:
             dense_embeddings = self.embedding.embed_dense(texts)
@@ -50,13 +52,14 @@ class IngestionService:
                 else list(sparse.values)
             )
 
-            point = self.qdrant.chunk_to_point(
+            point = self.qdrant.build_point_from_chunk(
                 chunk,
                 document_id,
                 dense_embeddings[i],
                 sparse_indices,
                 sparse_values,
                 role_allowed,
+                upload_date=upload_date,
             )
 
             points.append(point)
@@ -68,3 +71,5 @@ class IngestionService:
         except Exception as e:
             if self.verbose:
                 print(f"Qdrant insert failed: {e}")
+
+        return all_chunks
