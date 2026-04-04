@@ -1,4 +1,4 @@
-# 🏢 SmartCorp - Agentic RAG Internal Procedure System
+# 🏢 SmartCorp Oracle - Agentic RAG Internal Procedure System
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
@@ -6,66 +6,59 @@
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-FF5252)
 
-## 📌 1. Giới thiệu Đồ án (Project Overview)
-[cite_start]SmartCorp là một hệ thống hỏi đáp nội bộ tiên tiến ứng dụng kiến trúc **Agentic RAG** (Retrieval-Augmented Generation)[cite: 17]. Hệ thống được phát triển nhằm giải quyết bài toán tra cứu và tổng hợp các quy trình nghiệp vụ nội bộ phức tạp, thường bị phân mảnh trong nhiều định dạng tài liệu khác nhau. 
-
-Thay vì chỉ tìm kiếm theo từ khóa thông thường, SmartCorp đóng vai trò như một trợ lý AI thông minh:
-* [cite_start]Tự động đọc hiểu, bóc tách dữ liệu từ các tệp PDF, Docx (bao gồm cả bảng biểu và biểu đồ phức tạp)[cite: 20].
-* [cite_start]Kết hợp các mảnh thông tin rời rạc và suy luận thông qua mô hình tác tử đa bước (Multi-step LLM Agent)[cite: 22].
-* [cite_start]Cung cấp cho nhân viên các hướng dẫn hành động (actionable steps) rõ ràng, giúp rút ngắn thời gian tra cứu và tối ưu hóa quy trình Onboarding[cite: 22].
+## 📌 1. Giới thiệu Đồ án (Overview)
+SmartCorp Oracle là hệ thống hỏi đáp nội bộ ứng dụng kiến trúc lai giữa Agentic RAG, giao diện Next.js và cơ chế phân quyền bảo mật. Hệ thống tự động bóc tách dữ liệu đa định dạng, suy luận qua LLM và cung cấp hướng dẫn nghiệp vụ từng bước một cách minh bạch và chính xác.
 
 ---
 
 ## 🛠️ 2. Công nghệ sử dụng (Tech Stack)
-[cite_start]Dự án được xây dựng dựa trên các công nghệ và framework hiện đại[cite: 19]:
-
-* **AI & Machine Learning:**
-  * [cite_start]**Framework:** LangGraph (cho Agentic Workflow)[cite: 19], LangChain.
-  * [cite_start]**Xử lý tài liệu (Parsing):** LlamaParse, Unstructured.io, Tesseract OCR[cite: 20].
-  * [cite_start]**Tìm kiếm (Search):** Hybrid Search (Semantic Vector Search + BM25) [cite: 21][cite_start], BGE-Reranker[cite: 21], FastEmbed.
-* **Backend:** Python, FastAPI.
-* [cite_start]**Frontend:** Next.js[cite: 19], React, TailwindCSS.
-* [cite_start]**Database:** Qdrant (Vector Database)[cite: 19], PostgreSQL, Neo4j (Graph Database).
-* **DevOps & Môi trường:** Docker, Docker Compose, Linux.
+* **Frontend:** Next.js, Vercel AI SDK (Streaming UI).
+* **Backend & Agent:** FastAPI (Python), LangGraph.
+* **Database:** Qdrant (Vector DB), PostgreSQL (Relational DB).
+* **AI & Search:** Hybrid Search (BM25 + Semantic 1356d), Cohere/BGE-Reranker, LlamaParse/Unstructured.io.
 
 ---
 
-## ✨ 3. Chức năng chính & Giao diện (Core Features & Screenshots)
-<img width="1897" height="911" alt="image" src="https://github.com/user-attachments/assets/acd4d8e3-d8f7-46c5-a467-eddca4062897" />
+## ✨ 3. Chức năng chính & Giao diện (Core Features)
+<img width="1897" height="911" alt="Screenshot 2026-04-04 201901" src="https://github.com/user-attachments/assets/9fb9953c-a7e0-4a26-a416-aa5aa8c5198d" />
 
-### 3.1. Truy vấn Quy trình Tích hợp (Hybrid Search Q&A)
-Hệ thống cho phép người dùng đặt câu hỏi bằng ngôn ngữ tự nhiên. [cite_start]Nhờ kiến trúc Hybrid Search kết hợp BGE-Reranker, hệ thống truy xuất chính xác các mã quy trình đặc thù (như QT-01) mà không bị lỗi ảo giác (hallucination)[cite: 21].
+### 3.1. Tìm kiếm Lai Tích hợp Phân quyền (Role-based Hybrid Search)
+* Kết hợp sức mạnh tìm kiếm Vector và BM25.
+* Lọc kết quả ngay từ tầng Database thông qua trường `role_allowed` trong cấu trúc Payload.
+* Tích hợp Reranker để đẩy các kết quả chính xác nhất lên đầu.
 
-![Uploading image.png…]()
+<img width="2048" height="1747" alt="image" src="https://github.com/user-attachments/assets/39b179cb-4605-47bc-8576-14f9b49763eb" />
+![Role-based Search](docs/images/feature_role_search.png)
 
-> ![Truy vấn Quy trình](docs/images/feature_hybrid_search.png)
-> *Giao diện Chatbot hiển thị câu trả lời trích xuất kèm theo trích dẫn nguồn tài liệu (Citations).*
+### 3.2. Tác tử Điều phối & Tự sửa lỗi (Router & Self-Correction Agent)
+* Router Agent tự động phân loại ý định người dùng.
+* Vòng lặp Self-Correction tự động đánh giá và biến đổi câu truy vấn nếu tìm kiếm ban đầu thất bại.
+* Lịch sử ngữ cảnh được duy trì liên tục qua cơ chế `thread_id` của LangGraph.
+<img width="1919" height="911" alt="Screenshot 2026-04-04 202134" src="https://github.com/user-attachments/assets/19f652a0-772a-4a92-bcca-5953fcbe4de4" />
 
-### 3.2. Trợ lý Tổng hợp Đa bước (Agentic Synthesis)
-[cite_start]Khi người dùng yêu cầu một quy trình tổng hợp, Agent (dựa trên LangGraph) sẽ tự động lên kế hoạch (planning), gọi các công cụ (tools) truy xuất nhiều lần để thu thập đủ dữ liệu, và tổng hợp thành các bước thực thi (step-by-step instructions)[cite: 22].
 
-> **[Thêm ảnh tại đây]**
-> ![Agentic Workflow](docs/images/feature_agentic_workflow.png)
-> *Giao diện hiển thị quá trình Agent đang "suy nghĩ" (reasoning steps) và đưa ra bản hướng dẫn cuối cùng.*
+![Agentic Flow](docs/images/feature_agent_flow.png)
 
-### 3.3. Xử lý & Phân tích Tài liệu Đa định dạng (Document Parsing Pipeline)
-Người dùng (Admin) tải lên các tài liệu nội bộ (PDF, Docx, Markdown). [cite_start]Pipeline sẽ tự động kích hoạt LlamaParse và Tesseract OCR để bóc tách text chất lượng cao, bảo toàn cấu trúc bảng biểu phức tạp[cite: 20].
+### 3.3. Minh bạch Trích dẫn (Citation UX) & Quản lý Phiên bản (Versioning)
+* **Citation UX:** Hiển thị trực tiếp nội dung gốc tại Panel bên phải khi click vào nguồn trích dẫn. Dữ liệu trích dẫn (`chunk_text`) được lưu độc lập để bảo toàn lịch sử hội thoại.
+* **Collision & Versioning:** Phát hiện trùng lặp file qua thuật toán băm (file hash). Qdrant sử dụng `effective_date` (Unix timestamp) để phân loại và chỉ đưa ngữ cảnh mới nhất, sạch nhất vào LLM.
+<img width="1919" height="911" alt="Screenshot 2026-04-04 202134" src="https://github.com/user-attachments/assets/3d431a8a-6aa5-4623-95e0-247071e1e99f" />
 
-> **[Thêm ảnh tại đây]**
-> ![Document Upload](docs/images/feature_document_parsing.png)
-> *Giao diện quản lý tài liệu, hiển thị trạng thái Chunking và Vector hóa vào Qdrant.*
+![Citation and Versioning](docs/images/feature_citation_version.png)
 
 ---
 
-## 🚀 4. Hướng dẫn Cài đặt (Getting Started)
+## 🚀 4. Hướng dẫn Cài đặt & Kiểm thử (Getting Started)
 
-Dự án được container hóa hoàn toàn để đảm bảo tính đồng nhất (Dev/Prod Parity).
-
-### Yêu cầu hệ thống (Prerequisites)
-* Docker và Docker Compose.
-* Môi trường: Windows WSL2, Linux, hoặc macOS.
-
-### Cấu hình & Khởi chạy
-**1. Khởi tạo file cấu hình biến môi trường:**
+**1. Khởi tạo & Cấu hình:**
 ```bash
 cp .env.docker.example .env.docker
+```bash
+**2. Triển khai hệ thống bằng Docker:**
+```bash
+docker compose --env-file .env.docker up -d
+```bash
+Client UI: http://localhost:3000
+Backend API: http://localhost:8000/docs
+Qdrant Vector DB: http://localhost:6333/dashboard
+
