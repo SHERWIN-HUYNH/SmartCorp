@@ -30,7 +30,7 @@ class ChunkingService:
             self.upload_enabled = False
             self.cloudflare_service = None
             if self.verbose:
-                print(f"Cloudflare R2 upload disabled: {e}")
+                print(f"Cloudflare R2 upload disabled on startup: {e}")
 
     def _upload_tables_to_cloudflare(self, tables: List[str], chunk_index: int) -> List[str]:
         if not self.upload_enabled or not self.cloudflare_service:
@@ -306,7 +306,7 @@ class ChunkingService:
                 'raw_table': table_html,
             }
             if table_urls:
-                chunk['table_url'] = table_urls
+                chunk['table_url'] = table_urls[0]
             small_chunks.append(chunk)
 
         elif image_base64:
@@ -320,7 +320,7 @@ class ChunkingService:
                 'image_b64': image_base64,
             }
             if image_urls:
-                chunk['image_url'] = image_urls
+                chunk['image_url'] = image_urls[0]
             small_chunks.append(chunk)
 
         return small_chunks

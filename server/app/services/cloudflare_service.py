@@ -11,22 +11,46 @@ class CloudflareR2Service:
 
     def __init__(self):
         self.settings = get_settings()
+        self.bucket_name = self._get_required_setting("CLOUDFLARE_BUCKET_NAME")
         self.s3_client = self._init_s3_client()
+
+    def _get_required_setting(self, key: str) -> str:
+        value = getattr(self.settings, key, None)
+        if value is None:
+            raise ValueError(f"Missing required Cloudflare R2 env var: {key}")
+
+        normalized = str(value).strip()
+        if not normalized:
+            raise ValueError(f"Missing required Cloudflare R2 env var: {key}")
+        return normalized
 
     def _init_s3_client(self):
         """Initialize S3 client với Cloudflare R2 credentials"""
-        if not all([
-            self.settings.CLOUDFLARE_ACCOUNT_ID,
-            self.settings.CLOUDFLARE_ACCESS_KEY,
-            self.settings.CLOUDFLARE_SECRET_KEY
-        ]):
-            raise ValueError("Cloudflare R2 credentials not configured in .env file")
+        required_keys = [
+            "CLOUDFLARE_ACCOUNT_ID",
+            "CLOUDFLARE_ACCESS_KEY",
+            "CLOUDFLARE_SECRET_KEY",
+            "CLOUDFLARE_BUCKET_NAME",
+        ]
+        missing_keys = []
+        for key in required_keys:
+            value = getattr(self.settings, key, None)
+            if value is None or not str(value).strip():
+                missing_keys.append(key)
+
+        if missing_keys:
+            missing_list = ", ".join(missing_keys)
+            raise ValueError(f"Missing required Cloudflare R2 env var(s): {missing_list}")
+
+        account_id = str(self.settings.CLOUDFLARE_ACCOUNT_ID).strip()
+        access_key = str(self.settings.CLOUDFLARE_ACCESS_KEY).strip()
+        secret_key = str(self.settings.CLOUDFLARE_SECRET_KEY).strip()
 
         s3_client = boto3.client(
             "s3",
-            endpoint_url=f"https://{self.settings.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com",
-            aws_access_key_id=self.settings.CLOUDFLARE_ACCESS_KEY,
-            aws_secret_access_key=self.settings.CLOUDFLARE_SECRET_KEY,
+            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
             config=Config(signature_version="s3v4"),
             region_name="auto"
         )
@@ -65,7 +89,7 @@ class CloudflareR2Service:
         # Upload to R2
         try:
             self.s3_client.put_object(
-                Bucket=self.settings.CLOUDFLARE_BUCKET_NAME,
+                Bucket=self.bucket_name,
                 Key=filename,
                 Body=image_data,
                 ContentType="image/png"
@@ -100,7 +124,7 @@ class CloudflareR2Service:
         # Upload to R2
         try:
             self.s3_client.put_object(
-                Bucket=self.settings.CLOUDFLARE_BUCKET_NAME,
+                Bucket=self.bucket_name,
                 Key=filename,
                 Body=html_content.encode('utf-8'),
                 ContentType="text/html; charset=utf-8"
@@ -119,13 +143,13 @@ class CloudflareR2Service:
             return f"{self.settings.CLOUDFLARE_PUBLIC_URL.rstrip('/')}/{filename}"
         else:
             # Use R2 public URL
-            return f"https://{self.settings.CLOUDFLARE_BUCKET_NAME}.{self.settings.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/{filename}"
+            return f"https://{self.bucket_name}.{self.settings.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/{filename}"
 
     def delete_file(self, filename: str) -> bool:
         """Xóa file khỏi R2"""
         try:
             self.s3_client.delete_object(
-                Bucket=self.settings.CLOUDFLARE_BUCKET_NAME,
+                Bucket=self.bucket_name,
                 Key=filename
             )
             return True
@@ -136,7 +160,7 @@ class CloudflareR2Service:
         """List tất cả files trong R2 bucket"""
         try:
             response = self.s3_client.list_objects_v2(
-                Bucket=self.settings.CLOUDFLARE_BUCKET_NAME,
+                Bucket=self.bucket_name,
                 Prefix=prefix
             )
             files = []

@@ -50,6 +50,27 @@ class Point(BaseModel):
     vector: Vector
     payload: Payload
 
+    @staticmethod
+    def _first_non_empty_string(value: object) -> Optional[str]:
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+
+        if isinstance(value, list):
+            for item in value:
+                if item is None:
+                    continue
+                item_str = str(item).strip()
+                if item_str:
+                    return item_str
+            return None
+
+        value_str = str(value).strip()
+        return value_str or None
+
     @classmethod
     def from_chunk(
         cls,
@@ -73,6 +94,19 @@ class Point(BaseModel):
         except ValueError:
             chunk_type = ChunkType.TEXT
 
+        table_url_value = None
+        image_url_value = None
+
+        if chunk_type == ChunkType.TABLE:
+            table_url_value = cls._first_non_empty_string(chunk.get("table_url"))
+            if not table_url_value:
+                table_url_value = cls._first_non_empty_string(chunk.get("raw_table"))
+
+        if chunk_type == ChunkType.IMAGE:
+            image_url_value = cls._first_non_empty_string(chunk.get("image_url"))
+            if not image_url_value:
+                image_url_value = cls._first_non_empty_string(chunk.get("image_b64"))
+
         payload = Payload(
             document_id=document_id,
             page=int(chunk.get("page", 0) or 0),
@@ -81,16 +115,8 @@ class Point(BaseModel):
             type=chunk_type,
             parent_id=str(chunk.get("parent_id", "")),
             order=int(chunk.get("order", 0) or 0),
-            table_url=(
-                chunk.get("raw_table")[0]
-                if chunk_type == ChunkType.TABLE and chunk.get("raw_table")
-                else None
-            ),
-            image_url=(
-                chunk.get("image_b64")[0]
-                if chunk_type == ChunkType.IMAGE and chunk.get("image_b64")
-                else None
-            ),
+            table_url=table_url_value,
+            image_url=image_url_value,
             upload_date=upload_date,
             is_active=True,
         )
