@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000"
     QDRANT_HOST: str = "http://localhost:6333"
     QDRANT_COLLECTION: str = "SmartCorp"
+    CLOUDFLARE_ACCOUNT_ID: str | None = None
+    CLOUDFLARE_ACCESS_KEY: str | None = None
+    CLOUDFLARE_SECRET_KEY: str | None = None
+    CLOUDFLARE_BUCKET_NAME: str | None = None
+    CLOUDFLARE_PUBLIC_URL: str | None = None
 
     @property
     def cors_origins_list(self) -> list[str]:

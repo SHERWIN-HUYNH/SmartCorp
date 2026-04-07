@@ -1,6 +1,6 @@
 import React from 'react';
 import { RefreshCw, FileText, File, X } from 'lucide-react';
-import { QueueItemData } from '@/types';
+import { QueueItemData } from '@/lib/types';
 
 const queueItems: QueueItemData[] = [
   {

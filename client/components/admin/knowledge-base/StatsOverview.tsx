@@ -1,6 +1,15 @@
 import React from 'react';
-import { FolderOpen, AlignLeft, ShieldCheck } from 'lucide-react';
-import { StatItem } from '@/types';
+import { FolderOpen, AlignLeft, ShieldCheck, LucideIcon } from 'lucide-react';
+
+type StatItem = {
+  id: string;
+  label: string;
+  value: string;
+  icon: LucideIcon;
+  iconBgClass: string;
+  iconColorClass: string;
+  trend?: { value: string; isPositive: boolean };
+};
 
 const stats: StatItem[] = [
   {

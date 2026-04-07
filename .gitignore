@@ -1,0 +1,6 @@
+!.env.example
+!.env.docker.example
+
+.env.docker
+.env.local
+.env.*.local
