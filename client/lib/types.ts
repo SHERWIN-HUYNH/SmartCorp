@@ -74,3 +74,13 @@ export interface ActivityUpdate {
   iconWrapperClass: string;
   iconClass: string;
 }
+
+export interface QueueItemData {
+  id: string;
+  name: string;
+  size: string;
+  progress: number;
+  status: 'uploading' | 'parsing' | 'chunking' | 'embedding' | 'indexed';
+  type: 'pdf' | 'docx';
+  activeSteps: string[];
+}

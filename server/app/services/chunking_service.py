@@ -6,6 +6,7 @@ from unstructured.partition.pdf import partition_pdf
 from unstructured.chunking.title import chunk_by_title
 
 from app.core.prompt import SearchableDescriptionPrompts
+from app.services.cloudflare_service import CloudflareR2Service
 
 
 class ChunkingService:
@@ -15,6 +16,63 @@ class ChunkingService:
         self.use_hard_max_length_characters = use_hard_max_length_characters
         self.split_character = '<<SPLIT>>'
         self.verbose = verbose
+        self.cloudflare_service: Optional[CloudflareR2Service] = None
+        self.upload_enabled = False
+        self._init_cloudflare_upload()
+
+    def _init_cloudflare_upload(self):
+        try:
+            self.cloudflare_service = CloudflareR2Service()
+            self.upload_enabled = True
+            if self.verbose:
+                print("Cloudflare R2 upload is enabled")
+        except Exception as e:
+            self.upload_enabled = False
+            self.cloudflare_service = None
+            if self.verbose:
+                print(f"Cloudflare R2 upload disabled on startup: {e}")
+
+    def _upload_tables_to_cloudflare(self, tables: List[str], chunk_index: int) -> List[str]:
+        if not self.upload_enabled or not self.cloudflare_service:
+            return []
+
+        uploaded_urls = []
+        for table_idx, table_html in enumerate(tables):
+            if not table_html:
+                continue
+
+            try:
+                table_url = self.cloudflare_service.upload_html_table(
+                    table_html,
+                    filename=f"tables/chunk_{chunk_index}_{table_idx}.html",
+                )
+                uploaded_urls.append(table_url)
+            except Exception as e:
+                if self.verbose:
+                    print(f"Table upload failed at chunk {chunk_index}, index {table_idx}: {e}")
+
+        return uploaded_urls
+
+    def _upload_images_to_cloudflare(self, images: List[str], chunk_index: int) -> List[str]:
+        if not self.upload_enabled or not self.cloudflare_service:
+            return []
+
+        uploaded_urls = []
+        for image_idx, image_b64 in enumerate(images):
+            if not image_b64:
+                continue
+
+            try:
+                image_url = self.cloudflare_service.upload_image_from_base64(
+                    image_b64,
+                    filename=f"images/chunk_{chunk_index}_{image_idx}.png",
+                )
+                uploaded_urls.append(image_url)
+            except Exception as e:
+                if self.verbose:
+                    print(f"Image upload failed at chunk {chunk_index}, index {image_idx}: {e}")
+
+        return uploaded_urls
 
 
     def _partition_document(self, file_path: str):
@@ -153,6 +211,8 @@ class ChunkingService:
         
         for i, chunk in enumerate(chunks):
             content_data = self._separate_content_types(chunk)
+            table_urls = self._upload_tables_to_cloudflare(content_data['tables'], i)
+            image_urls = self._upload_images_to_cloudflare(content_data['images'], i)
             
             
             if content_data['tables'] or content_data['images']:
@@ -176,7 +236,9 @@ class ChunkingService:
                         "page": content_data['page_number'],
                         "raw_text": content_data['text'],
                         "tables_html": content_data['tables'],
-                        "images_base64": content_data['images']
+                        "images_base64": content_data['images'],
+                        "table_urls": table_urls,
+                        "image_urls": image_urls,
                     })
                 }
             }
@@ -217,6 +279,8 @@ class ChunkingService:
         title = split_texts[0]
         table_html = original_content.get('tables_html', [])
         image_base64 = original_content.get('images_base64', [])
+        table_urls = original_content.get('table_urls', [])
+        image_urls = original_content.get('image_urls', [])
 
         for text in split_texts[1:]:
             chunk = {
@@ -241,6 +305,8 @@ class ChunkingService:
                 'order': order,
                 'raw_table': table_html,
             }
+            if table_urls:
+                chunk['table_url'] = table_urls[0]
             small_chunks.append(chunk)
 
         elif image_base64:
@@ -253,6 +319,8 @@ class ChunkingService:
                 'order': order,
                 'image_b64': image_base64,
             }
+            if image_urls:
+                chunk['image_url'] = image_urls[0]
             small_chunks.append(chunk)
 
         return small_chunks

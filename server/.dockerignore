@@ -2,9 +2,12 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.sqlite3
+.pytest_cache/
 .venv/
 venv/
+smartcope/
 .git/
+.gitignore
 .env
 *.md
-tests/

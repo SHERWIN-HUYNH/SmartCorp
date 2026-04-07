@@ -6,7 +6,18 @@ import {
   File, Database, Edit2, Eye, RefreshCw, Trash2, AlertTriangle,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { DocumentData } from '@/types';
+
+type DocumentData = {
+  id: string;
+  name: string;
+  type: string;
+  size: string;
+  processCode: string;
+  version: string;
+  effectiveDate: string;
+  roles: string[];
+  status: 'indexed' | 'chunking' | 'failed';
+};
 
 const documents: DocumentData[] = [
   {

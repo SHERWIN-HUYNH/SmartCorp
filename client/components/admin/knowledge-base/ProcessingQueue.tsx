@@ -1,6 +1,18 @@
 import React from 'react';
 import { RefreshCw, FileText, File, X } from 'lucide-react';
-import { QueueItemData } from '@/types';
+
+type QueueStatus = 'uploading' | 'parsing' | 'chunking' | 'embedding' | 'indexed';
+type QueueFileType = 'pdf' | 'docx' | 'txt' | 'md';
+
+interface QueueItemData {
+  id: string;
+  name: string;
+  size: string;
+  progress: number;
+  status: QueueStatus;
+  type: QueueFileType;
+  activeSteps: QueueStatus[];
+}
 
 const queueItems: QueueItemData[] = [
   {
