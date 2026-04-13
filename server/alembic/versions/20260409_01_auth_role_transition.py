@@ -21,6 +21,7 @@ depends_on = None
 
 
 ROLE_INDEX_NAME = "ix_roles_name"
+USER_EMAIL_INDEX_NAME = "ix_users_email"
 USER_ROLE_INDEX_NAME = "ix_users_role_id"
 USER_ROLE_FK_NAME = "fk_users_role_id"
 
@@ -55,6 +56,12 @@ def _fk_exists(table_name: str, constrained_columns: list[str], referred_table: 
     return False
 
 
+def _fk_name_exists(table_name: str, fk_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return fk_name in {foreign_key.get("name") for foreign_key in inspector.get_foreign_keys(table_name)}
+
+
 def upgrade() -> None:
     bind = op.get_bind()
 
@@ -86,9 +93,29 @@ def upgrade() -> None:
         ],
     )
 
+    if not _table_exists("users"):
+        op.create_table(
+            "users",
+            sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("email", sa.String(), nullable=False),
+            sa.Column("password_hash", sa.String(), nullable=False),
+            sa.Column("name", sa.String(), nullable=False),
+            sa.Column("role_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column("role", sa.String(), server_default=sa.text("'user'"), nullable=False),
+            sa.Column("state", sa.String(), server_default=sa.text("'active'"), nullable=False),
+            sa.Column("refresh_token", sa.String(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["role_id"], ["roles.id"], name=USER_ROLE_FK_NAME),
+            sa.PrimaryKeyConstraint("id"),
+        )
+
     if _table_exists("users"):
         if not _column_exists("users", "role_id"):
             op.add_column("users", sa.Column("role_id", postgresql.UUID(as_uuid=True), nullable=True))
+
+        if not _index_exists("users", USER_EMAIL_INDEX_NAME):
+            op.create_index(USER_EMAIL_INDEX_NAME, "users", ["email"], unique=True)
 
         if not _index_exists("users", USER_ROLE_INDEX_NAME):
             op.create_index(USER_ROLE_INDEX_NAME, "users", ["role_id"], unique=False)
@@ -118,7 +145,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if _table_exists("users"):
-        if _fk_exists("users", ["role_id"], "roles"):
+        if _fk_name_exists("users", USER_ROLE_FK_NAME):
             op.drop_constraint(USER_ROLE_FK_NAME, "users", type_="foreignkey")
 
         if _index_exists("users", USER_ROLE_INDEX_NAME):

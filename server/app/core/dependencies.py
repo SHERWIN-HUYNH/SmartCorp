@@ -42,12 +42,14 @@ def get_current_user(
 
 def require_role_manager(current_user: User = Depends(get_current_user)) -> User:
     current_role = resolve_user_role_name(current_user)
+    role_ref_name = current_user.role_ref.name if current_user.role_ref else None
     logger.warning(
-        "RBAC check user_id=%s role=%s allowlist=%s role_id=%s role_str=%s",
+        "RBAC check user_id=%s role=%s allowlist=%s role_id=%s role_ref=%s role_str=%s",
         current_user.id,
         current_role,
         settings.role_manager_allowlist,
         current_user.role_id,
+        role_ref_name,
         current_user.role,
     )
     if current_role not in settings.role_manager_allowlist:

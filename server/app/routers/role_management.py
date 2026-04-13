@@ -360,15 +360,24 @@ def update_role(
 ):
     _ = current_user
     role = _get_role_or_404(db, role_id)
+    role_name_updated = False
 
     if payload.name is not None:
         existing = db.query(Role).filter(Role.name == payload.name, Role.id != role.id).first()
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role name already exists")
         role.name = payload.name
+        role_name_updated = True
 
     if payload.description is not None:
         role.description = payload.description
+
+    if role_name_updated:
+        # Keep legacy role string aligned during role_id migration.
+        db.query(User).filter(User.role_id == role.id).update(
+            {User.role: role.name},
+            synchronize_session=False,
+        )
 
     db.add(role)
     db.commit()
