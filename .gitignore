@@ -4,3 +4,6 @@
 .env.docker
 .env.local
 .env.*.local
+
+
+context/

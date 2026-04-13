@@ -5,12 +5,12 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Mail, Lock, LayoutGrid } from 'lucide-react';
 import { signup } from '@/lib/auth-api';
+import { getLandingPathForRole } from '@/lib/role-access';
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
 export default function SignupPage() {
   const router = useRouter();
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api';
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -52,8 +52,8 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      await signup({name, email, password});
-      router.push('/chatbot');
+      const response = await signup({name, email, password});
+      router.push(getLandingPathForRole(response.user.role));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unexpected error happened.');
     } finally {
