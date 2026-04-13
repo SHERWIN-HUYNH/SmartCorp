@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime
 from typing import List, Optional
 
 from app.schemas.qdrant_schema import (
@@ -78,6 +79,7 @@ class QdrantAPI:
 
     def hybrid_search(self, body: HybridSearchRequest):
         url = f"{self.host}/collections/{self.collection}/points/query"
+        now_ts = int(datetime.utcnow().timestamp())
 
         query = {
             "prefetch": [
@@ -106,8 +108,12 @@ class QdrantAPI:
             "key": "is_active",
             "match": {"value": True}
         }
+        effective_date_filter = {
+            "key": "effective_date",
+            "range": {"lte": now_ts},
+        }
 
-        must_filters = [active_filter]
+        must_filters = [active_filter, effective_date_filter]
         if body.role_allowed:
             must_filters.append(
                 {
@@ -122,6 +128,7 @@ class QdrantAPI:
 
     def scroll(self, filter_query: Optional[dict] = None, limit: int = 10):
         url = f"{self.host}/collections/{self.collection}/points/scroll"
+        now_ts = int(datetime.utcnow().timestamp())
 
         payload = {"limit": limit, "sort": [{"key": "upload_date", "order": "desc"}]}
 
@@ -129,15 +136,20 @@ class QdrantAPI:
             "key": "is_active",
             "match": {"value": True}
         }
+        effective_date_filter = {
+            "key": "effective_date",
+            "range": {"lte": now_ts},
+        }
 
         if filter_query:
             if "must" in filter_query:
                 filter_query["must"].append(active_filter)
+                filter_query["must"].append(effective_date_filter)
             else:
-                filter_query = {"must": [filter_query, active_filter]}
+                filter_query = {"must": [filter_query, active_filter, effective_date_filter]}
             payload["filter"] = filter_query
         else:
-            payload["filter"] = {"must": [active_filter]}
+            payload["filter"] = {"must": [active_filter, effective_date_filter]}
 
         return requests.post(url, json=payload).json()
 

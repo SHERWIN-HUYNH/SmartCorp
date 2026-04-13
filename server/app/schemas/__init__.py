@@ -6,6 +6,29 @@ from app.schemas.user import (
 	TokenResponse,
 	UserResponse,
 )
+from app.schemas.document import (
+	ConfirmDocumentUploadRequest,
+	ConfirmDocumentUploadResponse,
+	DocumentListResponse,
+	DocumentStatsResponse,
+	DocumentQueueResponse,
+	DocumentResponse,
+	DocumentUploadResponse,
+	PrecheckDocumentRequest,
+	PrecheckDocumentResponse,
+	QueueDocumentResponse,
+	UpdateDocumentPermissionsRequest,
+)
+from app.schemas.role import (
+	RoleCreateRequest,
+	RoleDetailResponse,
+	RoleDeleteResponse,
+	RoleDocumentsResponse,
+	RoleListResponse,
+	RoleSummaryResponse,
+	RoleUsersResponse,
+	RoleUpdateRequest,
+)
 
 __all__ = [
 	"SignupRequest",
@@ -14,4 +37,23 @@ __all__ = [
 	"UserResponse",
 	"AuthResponse",
 	"MessageResponse",
+	"PrecheckDocumentRequest",
+	"PrecheckDocumentResponse",
+	"DocumentUploadResponse",
+	"ConfirmDocumentUploadRequest",
+	"ConfirmDocumentUploadResponse",
+	"DocumentResponse",
+	"DocumentListResponse",
+	"QueueDocumentResponse",
+	"DocumentQueueResponse",
+	"UpdateDocumentPermissionsRequest",
+	"DocumentStatsResponse",
+	"RoleCreateRequest",
+	"RoleUpdateRequest",
+	"RoleSummaryResponse",
+	"RoleDetailResponse",
+	"RoleListResponse",
+	"RoleUsersResponse",
+	"RoleDocumentsResponse",
+	"RoleDeleteResponse",
 ]

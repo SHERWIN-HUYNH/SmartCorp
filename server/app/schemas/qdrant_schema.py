@@ -43,6 +43,7 @@ class Payload(BaseModel):
 
     is_active: bool = True
     upload_date: int = Field(default_factory=lambda: int(datetime.utcnow().timestamp()))
+    effective_date: int = Field(default_factory=lambda: int(datetime.utcnow().timestamp()))
 
 
 class Point(BaseModel):
@@ -81,12 +82,16 @@ class Point(BaseModel):
         sparse_values: List[float],
         role_allowed: Optional[List[str]] = None,
         upload_date: Optional[int] = None,
+        effective_date: Optional[int] = None,
     ) -> "Point":
         if role_allowed is None:
             role_allowed = ["general"]
 
         if upload_date is None:
             upload_date = int(datetime.utcnow().timestamp())
+
+        if effective_date is None:
+            effective_date = upload_date
 
         chunk_type_value = chunk.get("type", ChunkType.TEXT.value)
         try:
@@ -118,6 +123,7 @@ class Point(BaseModel):
             table_url=table_url_value,
             image_url=image_url_value,
             upload_date=upload_date,
+            effective_date=effective_date,
             is_active=True,
         )
 

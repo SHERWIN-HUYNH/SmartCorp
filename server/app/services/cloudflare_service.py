@@ -136,6 +136,35 @@ class CloudflareR2Service:
         except Exception as e:
             raise RuntimeError(f"Failed to upload HTML table to R2: {e}")
 
+    def upload_document_file(
+        self,
+        file_bytes: bytes,
+        filename: Optional[str] = None,
+        content_type: Optional[str] = None,
+    ) -> str:
+        """Upload raw document file lên R2 và trả về public URL."""
+        if not file_bytes:
+            raise ValueError("Document file is empty")
+
+        if not filename:
+            filename = f"documents/{uuid.uuid4()}.bin"
+        elif not filename.startswith("documents/"):
+            filename = f"documents/{filename}"
+
+        safe_content_type = content_type or "application/octet-stream"
+
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=filename,
+                Body=file_bytes,
+                ContentType=safe_content_type,
+            )
+
+            return self._get_public_url(filename)
+        except Exception as e:
+            raise RuntimeError(f"Failed to upload document to R2: {e}")
+
     def _get_public_url(self, filename: str) -> str:
         """Generate public URL cho file"""
         if self.settings.CLOUDFLARE_PUBLIC_URL:

@@ -1,6 +1,6 @@
 from datetime import datetime
 from types import SimpleNamespace
-from typing import List
+from typing import List, Optional
 
 from app.services.chunking_service import ChunkingService
 from app.services.embedding_service import EmbeddingService
@@ -20,15 +20,27 @@ class IngestionService:
         self.qdrant = qdrant_service
         self.verbose = verbose
 
-    def ingest_pdf(self, file_path: str, document_id: str, role_allowed: List[str]):
+    def ingest_pdf(
+        self,
+        file_path: str,
+        document_id: str,
+        role_allowed: List[str],
+        effective_date: Optional[datetime] = None,
+    ):
         elements = self.chunking_service.partition_document(file_path)
 
         chunks = self.chunking_service.create_chunks_by_title(elements)
-        processed_chunks = self.chunking_service.summarise_chunks(chunks)
+        processed_chunks = self.chunking_service.summarise_chunks(
+            chunks,
+            document_id=document_id,
+        )
         all_chunks = self.chunking_service.split_chunks(processed_chunks)
 
         texts = [chunk.get('text', '') for chunk in all_chunks]
         upload_date = int(datetime.utcnow().timestamp())
+        effective_date_ts = (
+            int(effective_date.timestamp()) if effective_date is not None else upload_date
+        )
 
         try:
             dense_embeddings = self.embedding.embed_dense(texts)
@@ -60,6 +72,7 @@ class IngestionService:
                 sparse_values,
                 role_allowed,
                 upload_date=upload_date,
+                effective_date=effective_date_ts,
             )
 
             points.append(point)

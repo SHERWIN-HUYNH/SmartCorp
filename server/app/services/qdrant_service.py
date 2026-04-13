@@ -49,6 +49,7 @@ class QdrantService:
         sparse_values: List[float],
         role_allowed: Optional[List[str]] = None,
         upload_date: Optional[int] = None,
+        effective_date: Optional[int] = None,
     ) -> Point:
         return Point.from_chunk(
             chunk=chunk,
@@ -58,6 +59,7 @@ class QdrantService:
             sparse_values=sparse_values,
             role_allowed=role_allowed,
             upload_date=upload_date,
+            effective_date=effective_date,
         )
 
     # -------- Search --------

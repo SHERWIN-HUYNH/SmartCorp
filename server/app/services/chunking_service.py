@@ -32,7 +32,25 @@ class ChunkingService:
             if self.verbose:
                 print(f"Cloudflare R2 upload disabled on startup: {e}")
 
-    def _upload_tables_to_cloudflare(self, tables: List[str], chunk_index: int) -> List[str]:
+    def _build_asset_key(
+        self,
+        kind: str,
+        chunk_index: int,
+        asset_index: int,
+        extension: str,
+        document_id: Optional[str] = None,
+    ) -> str:
+        doc_part = str(document_id or "unknown-doc").strip() or "unknown-doc"
+        safe_doc_part = doc_part.replace("/", "_")
+        unique_suffix = uuid.uuid4().hex[:8]
+        return f"{kind}/{safe_doc_part}/chunk_{chunk_index}_{asset_index}_{unique_suffix}.{extension}"
+
+    def _upload_tables_to_cloudflare(
+        self,
+        tables: List[str],
+        chunk_index: int,
+        document_id: Optional[str] = None,
+    ) -> List[str]:
         if not self.upload_enabled or not self.cloudflare_service:
             return []
 
@@ -42,9 +60,16 @@ class ChunkingService:
                 continue
 
             try:
+                object_key = self._build_asset_key(
+                    kind="tables",
+                    chunk_index=chunk_index,
+                    asset_index=table_idx,
+                    extension="html",
+                    document_id=document_id,
+                )
                 table_url = self.cloudflare_service.upload_html_table(
                     table_html,
-                    filename=f"tables/chunk_{chunk_index}_{table_idx}.html",
+                    filename=object_key,
                 )
                 uploaded_urls.append(table_url)
             except Exception as e:
@@ -53,7 +78,12 @@ class ChunkingService:
 
         return uploaded_urls
 
-    def _upload_images_to_cloudflare(self, images: List[str], chunk_index: int) -> List[str]:
+    def _upload_images_to_cloudflare(
+        self,
+        images: List[str],
+        chunk_index: int,
+        document_id: Optional[str] = None,
+    ) -> List[str]:
         if not self.upload_enabled or not self.cloudflare_service:
             return []
 
@@ -63,9 +93,16 @@ class ChunkingService:
                 continue
 
             try:
+                object_key = self._build_asset_key(
+                    kind="images",
+                    chunk_index=chunk_index,
+                    asset_index=image_idx,
+                    extension="png",
+                    document_id=document_id,
+                )
                 image_url = self.cloudflare_service.upload_image_from_base64(
                     image_b64,
-                    filename=f"images/chunk_{chunk_index}_{image_idx}.png",
+                    filename=object_key,
                 )
                 uploaded_urls.append(image_url)
             except Exception as e:
@@ -203,7 +240,7 @@ class ChunkingService:
             return summary
 
 
-    def _summarise_chunks(self, chunks):
+    def _summarise_chunks(self, chunks, document_id: Optional[str] = None):
         if self.verbose:
             print('Summary Chunks...')
 
@@ -211,8 +248,16 @@ class ChunkingService:
         
         for i, chunk in enumerate(chunks):
             content_data = self._separate_content_types(chunk)
-            table_urls = self._upload_tables_to_cloudflare(content_data['tables'], i)
-            image_urls = self._upload_images_to_cloudflare(content_data['images'], i)
+            table_urls = self._upload_tables_to_cloudflare(
+                content_data['tables'],
+                i,
+                document_id=document_id,
+            )
+            image_urls = self._upload_images_to_cloudflare(
+                content_data['images'],
+                i,
+                document_id=document_id,
+            )
             
             
             if content_data['tables'] or content_data['images']:
@@ -343,8 +388,8 @@ class ChunkingService:
     def create_chunks_by_title(self, elements):
         return self._create_chunks_by_title(elements)
 
-    def summarise_chunks(self, chunks):
-        return self._summarise_chunks(chunks)
+    def summarise_chunks(self, chunks, document_id: Optional[str] = None):
+        return self._summarise_chunks(chunks, document_id=document_id)
 
     def split_chunks(self, processed_chunks):
         return self._split_chunk(processed_chunks)

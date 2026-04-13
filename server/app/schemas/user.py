@@ -34,6 +34,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     name: str
     role: str
+    role_id: UUID | None = None
     state: str
     created_at: datetime
 

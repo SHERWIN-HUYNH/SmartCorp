@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.db.database import Base, engine
-from app.model import user  # noqa: F401
+from app import model  # noqa: F401
 from app.routers.auth import router as auth_router
+from app.routers.items import router as document_router
+from app.routers.qdrant import router as qdrant_router
+from app.routers.role_management import router as role_management_router
 
 settings = get_settings()
 
@@ -18,9 +20,10 @@ app.add_middleware(
 	allow_headers=["*"],
 )
 
-Base.metadata.create_all(bind=engine)
-
 app.include_router(auth_router, prefix="/api")
+app.include_router(document_router, prefix="/api")
+app.include_router(qdrant_router, prefix="/api")
+app.include_router(role_management_router, prefix="/api")
 
 
 @app.get("/healthz")
