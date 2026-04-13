@@ -1,83 +1,190 @@
 'use client';
-import { RoleDetails } from "@/components/admin/role-management/RoleDetails";
-import { RoleList } from "@/components/admin/role-management/RoleList";
-import { DocumentNode, RoleNode, UserNode } from "@/types/role";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { RoleDetails } from '@/components/admin/role-management/RoleDetails';
+import { RoleList } from '@/components/admin/role-management/RoleList';
+import {
+  createRole,
+  deleteRole,
+  listRoles,
+  listRoleManagementRoles,
+  type RoleOption,
+  type RoleManagementRole,
+  updateRole,
+} from '@/lib/auth-api';
+import { RoleNode } from '@/types/role';
 
-// Mock Data
-const mockUsers: UserNode[] = [
-  { id: 'u1', name: 'Jane Doe', initials: 'JD', email: 'jane.doe@enterprise.com', status: 'Active', avatarColor: 'bg-blue-100 text-blue-700' },
-  { id: 'u2', name: 'Alex Smith', initials: 'AS', email: 'alex.s@enterprise.com', status: 'Active', avatarColor: 'bg-orange-100 text-orange-700' },
-  { id: 'u3', name: 'Michael Ross', initials: 'MR', email: 'm.ross@enterprise.com', status: 'On Leave', avatarColor: 'bg-indigo-100 text-indigo-700' },
-  { id: 'u4', name: 'Sarah Lee', initials: 'SL', email: 's.lee@enterprise.com', status: 'Active', avatarColor: 'bg-slate-200 text-slate-700' },
-  { id: 'u5', name: 'Tom Wilson', initials: 'TW', email: 't.wilson@enterprise.com', status: 'Active', avatarColor: 'bg-blue-200 text-blue-800' },
-  { id: 'u6', name: 'Emma Gray', initials: 'EG', email: 'e.gray@enterprise.com', status: 'Restricted', avatarColor: 'bg-amber-100 text-amber-700' },
-];
-
-const mockDocuments: DocumentNode[] = [
-  { id: 'd1', name: 'Q4 Financial Forecast', type: 'file', uploadedBy: { name: 'Felix Vance', avatarUrl: 'https://i.pravatar.cc/150?u=felix' }, dateAdded: 'Oct 12, 2025' },
-  { id: 'd2', name: 'Security Protocols v2', type: 'security', uploadedBy: { name: 'Sarah Jenkins', avatarUrl: 'https://i.pravatar.cc/150?u=sarah' }, dateAdded: 'Sep 30, 2025' },
-  { id: 'd3', name: 'Employee Handbook', type: 'handbook', uploadedBy: { name: 'Marcus Chen', avatarUrl: 'https://i.pravatar.cc/150?u=marcus' }, dateAdded: 'Aug 15, 2025' },
-  { id: 'd4', name: 'IT Infrastructure Schema', type: 'schema', uploadedBy: { name: 'Alex Smith', avatarUrl: 'https://i.pravatar.cc/150?u=alex' }, dateAdded: 'Jul 22, 2025' },
-];
-
-const mockRoles: RoleNode[] = [
-  {
-    id: 'r1',
-    title: 'Financial Analyst',
-    description: 'Strategic access to quarterly reports, ledger audits, and risk assessment dashboards for the fiscal year.',
-    userCount: 12,
-    docCount: 45,
-    category: 'Core Access',
-    isCore: true,
-    users: mockUsers,
-    documents: mockDocuments,
-  },
-  {
-    id: 'r2',
-    title: 'Internal Auditor',
-    description: 'Compliance-focused role with extensive read-access to transactional logs and policy documentation.',
-    userCount: 4,
-    docCount: 128,
-    category: 'Read Only',
+function mapRoleToNode(role: RoleManagementRole): RoleNode {
+  return {
+    id: role.id,
+    title: role.name,
+    description: role.description || '',
+    userCount: role.user_count,
+    docCount: role.doc_count,
+    category: role.category === 'core' ? 'Core Access' : 'Custom',
+    isCore: role.is_system,
     users: [],
     documents: [],
-  },
-  {
-    id: 'r3',
-    title: 'System Architect',
-    description: 'Top-tier administrative role managing RAG index configuration and vector database connectivity.',
-    userCount: 2,
-    docCount: 999, // Representing "All Docs"
-    category: 'Admin Privileges',
+  };
+}
+
+function mapRoleOptionToNode(role: RoleOption): RoleNode {
+  const normalizedName = role.name.trim().toLowerCase();
+  const isCore = normalizedName === 'admin' || normalizedName === 'user';
+
+  return {
+    id: role.id,
+    title: role.name,
+    description: role.description || '',
+    userCount: 0,
+    docCount: 0,
+    category: isCore ? 'Core Access' : 'Custom',
+    isCore,
     users: [],
     documents: [],
-  },
-  {
-    id: 'r4',
-    title: 'Marketing Lead',
-    description: 'Access to brand assets, campaign history, and creative performance RAG indices.',
-    userCount: 18,
-    docCount: 312,
-    category: 'Departmental',
-    users: [],
-    documents: [],
-  },
-];
+  };
+}
 
 export default function RoleManagementPage() {
-    const [selectedRoleId, setSelectedRoleId] = useState<string>(mockRoles[0].id);
+  const [roles, setRoles] = useState<RoleNode[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [mutating, setMutating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    const selectedRole = mockRoles.find(r => r.id === selectedRoleId) || null;
-    return (
-         <div className="flex flex-1 overflow-hidden">
-          <RoleList 
-            roles={mockRoles} 
-            selectedRoleId={selectedRoleId} 
-            onSelectRole={setSelectedRoleId} 
-          />
-          <RoleDetails role={selectedRole} />
-        </div>
-    )
+  const loadRoles = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Base role list for rendering left panel, available for authenticated users.
+      const baseRoles = await listRoles();
+      let mapped = baseRoles.map(mapRoleOptionToNode);
+
+      // Enrich with role-management metrics when current user has permission.
+      try {
+        const response = await listRoleManagementRoles();
+        const summaryMap = new Map(response.items.map((role) => [role.id, role]));
+
+        mapped = mapped.map((role) => {
+          const summary = summaryMap.get(role.id);
+          if (!summary) {
+            return role;
+          }
+
+          const enriched = mapRoleToNode(summary);
+          return {
+            ...role,
+            userCount: enriched.userCount,
+            docCount: enriched.docCount,
+            category: enriched.category,
+            isCore: enriched.isCore,
+          };
+        });
+
+        const existingIds = new Set(mapped.map((role) => role.id));
+        const extra = response.items
+          .filter((role) => !existingIds.has(role.id))
+          .map(mapRoleToNode);
+        mapped = [...mapped, ...extra];
+      } catch {
+        // Keep base list visible even if role-management summary endpoint is forbidden.
+      }
+
+      setRoles(mapped);
+
+      setSelectedRoleId((prev) => {
+        if (mapped.length === 0) {
+          return '';
+        }
+        if (mapped.some((role) => role.id === prev)) {
+          return prev;
+        }
+        return mapped[0].id;
+      });
+    } catch (loadError) {
+      setRoles([]);
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load roles.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRoles();
+  }, [loadRoles]);
+
+  const selectedRole = useMemo(
+    () => roles.find((role) => role.id === selectedRoleId) || null,
+    [roles, selectedRoleId],
+  );
+
+  const handleCreateRole = async (payload: { name: string; description?: string }) => {
+    setMutating(true);
+    setError(null);
+    try {
+      const createdRole = await createRole(payload);
+      await loadRoles();
+      setSelectedRoleId(createdRole.id);
+    } catch (createError) {
+      const message = createError instanceof Error ? createError.message : 'Failed to create role.';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const handleUpdateRole = async (
+    roleId: string,
+    payload: { title?: string; description?: string },
+  ) => {
+    setMutating(true);
+    setError(null);
+    try {
+      await updateRole(roleId, {
+        name: payload.title,
+        description: payload.description,
+      });
+      await loadRoles();
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Failed to update role.');
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const handleDeleteRole = async (roleId: string) => {
+    setMutating(true);
+    setError(null);
+    try {
+      await deleteRole(roleId);
+      await loadRoles();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete role.');
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  return (
+    <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-[minmax(340px,40%)_minmax(0,1fr)]">
+      <RoleList
+        roles={roles}
+        selectedRoleId={selectedRoleId}
+        onSelectRole={setSelectedRoleId}
+        onCreateRole={handleCreateRole}
+        isLoading={loading || mutating}
+      />
+      <div className="min-w-0">
+        {error && <p className="px-6 pt-4 text-sm text-red-600 lg:px-10 lg:pt-6">{error}</p>}
+        <RoleDetails
+          role={selectedRole}
+          onUpdateRole={handleUpdateRole}
+          onDeleteRole={handleDeleteRole}
+          isMutating={mutating}
+        />
+      </div>
+    </div>
+  );
 }

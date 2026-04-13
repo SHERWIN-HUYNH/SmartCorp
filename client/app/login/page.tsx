@@ -6,6 +6,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { AuthApiError, login } from '@/lib/auth-api';
+import { getLandingPathForRole } from '@/lib/role-access';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,8 +27,8 @@ export default function LoginPage() {
         setErrorMessage('Email and password are required.');
         return;
       }
-      await login(email, password);
-      router.push('/chatbot');
+      const response = await login(email, password);
+      router.push(getLandingPathForRole(response.user.role));
     } catch (error) {
       if (error instanceof AuthApiError) {
         setErrorMessage(error.message);

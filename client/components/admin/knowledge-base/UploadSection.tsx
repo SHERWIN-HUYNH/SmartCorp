@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { UploadCloud, X, ChevronDown } from 'lucide-react';
-import { uploadDocuments } from '@/lib/auth-api';
+import { listRoles, RoleOption, uploadDocuments } from '@/lib/auth-api';
 
-const availableRoles = ['Admin', 'Manager', 'Viewer', 'Legal', 'DevOps'];
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'json', 'md'];
 
 function getFileExtension(fileName: string) {
@@ -21,34 +20,70 @@ function formatFileSize(size: number) {
 export function UploadSection() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
-  const [processCode, setProcessCode] = useState('');
-  const [version, setVersion] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(['Admin', 'Manager']);
-  const [useLlamaParse, setUseLlamaParse] = useState(true);
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [isRolesLoading, setIsRolesLoading] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadRoles() {
+      setIsRolesLoading(true);
+      try {
+        const roles = await listRoles();
+        if (!mounted) {
+          return;
+        }
+        setAvailableRoles(roles);
+
+        const adminRole = roles.find((role) => role.name.toLowerCase() === 'admin');
+        const defaultRoleId = adminRole?.id || roles[0]?.id;
+        setSelectedRoleIds(defaultRoleId ? [defaultRoleId] : []);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'Failed to load roles.';
+        setSubmitError(message);
+      } finally {
+        if (mounted) {
+          setIsRolesLoading(false);
+        }
+      }
+    }
+
+    loadRoles();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const getRoleName = (roleId: string) => {
+    const role = availableRoles.find((item) => item.id === roleId);
+    return role?.name || roleId;
+  };
+
   const canSubmit = useMemo(() => {
     return (
       files.length > 0 &&
-      processCode.trim().length > 0 &&
-      version.trim().length > 0 &&
       effectiveDate.length > 0 &&
-      selectedRoles.length > 0 &&
+      selectedRoleIds.length > 0 &&
+      !isRolesLoading &&
       !isSubmitting
     );
-  }, [files.length, processCode, version, effectiveDate, selectedRoles.length, isSubmitting]);
+  }, [files.length, effectiveDate, selectedRoleIds.length, isRolesLoading, isSubmitting]);
 
   const resetForm = () => {
     setFiles([]);
-    setProcessCode('');
-    setVersion('');
     setEffectiveDate('');
-    setSelectedRoles(['Admin', 'Manager']);
-    setUseLlamaParse(true);
+    const adminRole = availableRoles.find((role) => role.name.toLowerCase() === 'admin');
+    const defaultRoleId = adminRole?.id || availableRoles[0]?.id;
+    setSelectedRoleIds(defaultRoleId ? [defaultRoleId] : []);
     setIsDropdownOpen(false);
   };
 
@@ -138,19 +173,11 @@ export function UploadSection() {
       setSubmitError('Please add at least one valid file.');
       return;
     }
-    if (!processCode.trim()) {
-      setSubmitError('Process code is required.');
-      return;
-    }
-    if (!version.trim()) {
-      setSubmitError('Version is required.');
-      return;
-    }
     if (!effectiveDate) {
       setSubmitError('Effective date is required.');
       return;
     }
-    if (selectedRoles.length === 0) {
+    if (selectedRoleIds.length === 0) {
       setSubmitError('Please select at least one role.');
       return;
     }
@@ -159,15 +186,16 @@ export function UploadSection() {
     try {
       const result = await uploadDocuments({
         files,
-        processCode: processCode.trim(),
-        version: version.trim(),
         effectiveDate,
-        roles: selectedRoles,
-        useLlamaParse,
+        roleIds: selectedRoleIds,
       });
 
-      setSubmitSuccess(result.message || 'Upload submitted successfully.');
-      resetForm();
+      if (result.uploaded > 0) {
+        setSubmitSuccess(result.message);
+        resetForm();
+      } else {
+        setSubmitError(result.items.map((item) => `${item.filename}: ${item.detail}`).join(' | '));
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
       setSubmitError(message);
@@ -176,15 +204,15 @@ export function UploadSection() {
     }
   };
 
-  const toggleRole = (role: string) => {
-    setSelectedRoles(prev => 
-      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+  const toggleRole = (roleId: string) => {
+    setSelectedRoleIds((prev) =>
+      prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]
     );
   };
 
-  const removeRole = (role: string, e: React.MouseEvent) => {
+  const removeRole = (roleId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedRoles(prev => prev.filter(r => r !== role));
+    setSelectedRoleIds((prev) => prev.filter((id) => id !== roleId));
   };
 
   return (
@@ -263,28 +291,8 @@ export function UploadSection() {
 
       {/* Metadata Form */}
       <div className="lg:col-span-7 bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-outline-variant/10 flex flex-col justify-between">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">Process Code</label>
-            <input 
-              value={processCode}
-              onChange={(event) => setProcessCode(event.target.value)}
-              className="w-full bg-surface-container border-none rounded-xl text-sm py-2 px-4 focus:ring-2 focus:ring-primary/5 focus:outline-none" 
-              placeholder="e.g. QT-06" 
-              type="text" 
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">Version</label>
-            <input 
-              value={version}
-              onChange={(event) => setVersion(event.target.value)}
-              className="w-full bg-surface-container border-none rounded-xl text-sm py-2 px-4 focus:ring-2 focus:ring-primary/5 focus:outline-none" 
-              placeholder="v1.4.2" 
-              type="text" 
-            />
-          </div>
-          <div className="space-y-1 col-span-2 sm:col-span-1">
             <label className="text-xs font-bold text-outline uppercase tracking-wider">Effective Date</label>
             <input 
               value={effectiveDate}
@@ -303,13 +311,13 @@ export function UploadSection() {
               className="w-full bg-surface-container border border-transparent rounded-xl p-2 flex flex-wrap gap-2 items-start content-start min-h-[44px] max-h-[88px] overflow-y-auto focus-within:ring-2 focus-within:ring-primary/10 transition-all cursor-pointer"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
-              {selectedRoles.map(role => (
-                <span key={role} className="flex items-center gap-1 px-3 py-1 bg-primary text-white text-xs font-bold rounded-lg shrink-0">
-                  {role}
-                  <X className="w-3 h-3 cursor-pointer hover:text-white/80" onClick={(e) => removeRole(role, e)} />
+              {selectedRoleIds.map((roleId) => (
+                <span key={roleId} className="flex items-center gap-1 px-3 py-1 bg-primary text-white text-xs font-bold rounded-lg shrink-0">
+                  {getRoleName(roleId)}
+                  <X className="w-3 h-3 cursor-pointer hover:text-white/80" onClick={(e) => removeRole(roleId, e)} />
                 </span>
               ))}
-              {selectedRoles.length === 0 && <span className="text-outline text-sm ml-1 mt-0.5">Select roles...</span>}
+              {selectedRoleIds.length === 0 && <span className="text-outline text-sm ml-1 mt-0.5">Select roles...</span>}
               <ChevronDown className="w-4 h-4 ml-auto mt-1 text-outline shrink-0" />
             </div>
 
@@ -319,15 +327,15 @@ export function UploadSection() {
                 <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)}></div>
                 <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-1 max-h-48 overflow-y-auto">
-                    {availableRoles.map(role => (
-                      <label key={role} className="px-4 py-2 hover:bg-slate-50 text-sm font-medium flex items-center gap-3 text-on-surface cursor-pointer rounded-lg">
+                    {availableRoles.map((role) => (
+                      <label key={role.id} className="px-4 py-2 hover:bg-slate-50 text-sm font-medium flex items-center gap-3 text-on-surface cursor-pointer rounded-lg">
                         <input 
                           type="checkbox" 
-                          checked={selectedRoles.includes(role)}
-                          onChange={() => toggleRole(role)}
+                          checked={selectedRoleIds.includes(role.id)}
+                          onChange={() => toggleRole(role.id)}
                           className="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" 
                         />
-                        {role}
+                        {role.name}
                       </label>
                     ))}
                   </div>
@@ -337,26 +345,14 @@ export function UploadSection() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={useLlamaParse}
-                onChange={(event) => setUseLlamaParse(event.target.checked)}
-              />
-              <div className="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
-            <span className="text-sm font-semibold text-on-surface">Use LlamaParse for complex tables</span>
-          </div>
+        <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4">
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
             className="w-full sm:w-auto bg-primary-container text-white px-8 py-3 rounded-xl font-bold text-sm shadow-xl shadow-primary-container/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            {isSubmitting ? 'Uploading...' : 'Upload & Process All'}
+            {isSubmitting ? 'Uploading...' : isRolesLoading ? 'Loading roles...' : 'Upload & Process All'}
           </button>
         </div>
 

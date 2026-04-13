@@ -1,115 +1,263 @@
 'use client';
 
-import React, { useState } from 'react';
-import { 
-  Search, Filter, Download, Settings, FileText, 
-  File, Database, Edit2, Eye, RefreshCw, Trash2, AlertTriangle,
-  ChevronLeft, ChevronRight
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  Database,
+  Edit2,
+  Eye,
+  File,
+  FileText,
+  Filter,
+  RefreshCw,
+  Search,
+  Settings,
+  Trash2,
 } from 'lucide-react';
 
-type DocumentData = {
-  id: string;
-  name: string;
-  type: string;
-  size: string;
-  processCode: string;
-  version: string;
-  effectiveDate: string;
-  roles: string[];
-  status: 'indexed' | 'chunking' | 'failed';
-};
+import {
+  deleteDocument,
+  listDocuments,
+  listRoles,
+  retryDocumentIngestion,
+  type DocumentRecord,
+  type DocumentStatus,
+  type RoleOption,
+  updateDocumentPermissions,
+} from '@/lib/auth-api';
 
-const documents: DocumentData[] = [
-  {
-    id: '1',
-    name: 'Employee_Handbook_2024.pdf',
-    type: 'PDF Document',
-    size: '4.5MB',
-    processCode: 'HR-01',
-    version: 'v2.1',
-    effectiveDate: 'Jan 01, 2024',
-    roles: ['Admin', 'Manager'],
-    status: 'indexed'
-  },
-  {
-    id: '2',
-    name: 'Cloud_Infrastructure_Specs.docx',
-    type: 'Word Doc',
-    size: '1.2MB',
-    processCode: 'IT-05',
-    version: 'v1.0',
-    effectiveDate: 'Mar 15, 2024',
-    roles: ['DevOps'],
-    status: 'chunking'
-  },
-  {
-    id: '3',
-    name: 'Compliance_Schema_2024.json',
-    type: 'JSON Data',
-    size: '0.5MB',
-    processCode: 'LEG-09',
-    version: 'v3.4',
-    effectiveDate: 'Feb 20, 2024',
-    roles: ['Legal'],
-    status: 'failed'
+function formatFileSize(bytes?: number | null): string {
+  if (!bytes || bytes <= 0) {
+    return 'Unknown size';
   }
-];
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function resolveTypeLabel(document: DocumentRecord): string {
+  const filename = document.filename.toLowerCase();
+  const mimeType = document.mime_type?.toLowerCase() || '';
+
+  if (mimeType.includes('pdf') || filename.endsWith('.pdf')) {
+    return 'PDF Document';
+  }
+  if (mimeType.includes('word') || filename.endsWith('.docx') || filename.endsWith('.doc')) {
+    return 'Word Document';
+  }
+  if (mimeType.includes('json') || filename.endsWith('.json')) {
+    return 'JSON Data';
+  }
+  if (mimeType.includes('markdown') || filename.endsWith('.md')) {
+    return 'Markdown';
+  }
+  return 'File';
+}
+
+function resolveStatusLabel(status: DocumentStatus): string {
+  if (status === 'ready') {
+    return 'Indexed';
+  }
+  if (status === 'processing') {
+    return 'Processing';
+  }
+  if (status === 'pending') {
+    return 'Pending';
+  }
+  if (status === 'failed') {
+    return 'Failed';
+  }
+  return 'Deleted';
+}
+
+function statusBadgeClass(status: DocumentStatus): string {
+  if (status === 'ready') {
+    return 'bg-emerald-100 text-emerald-700';
+  }
+  if (status === 'processing' || status === 'pending') {
+    return 'bg-amber-100 text-amber-700';
+  }
+  if (status === 'failed') {
+    return 'bg-error-container/20 text-error';
+  }
+  return 'bg-slate-200 text-slate-600';
+}
 
 export function DocumentTable() {
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | DocumentStatus>('all');
+
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
+  const [draftRoleIds, setDraftRoleIds] = useState<string[]>([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const togglePopover = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpenPopoverId(openPopoverId === id ? null : id);
-  };
+  const roleNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    roles.forEach((role) => {
+      map[role.id] = role.name;
+    });
+    return map;
+  }, [roles]);
 
-  // Close popover when clicking outside
-  React.useEffect(() => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [documentsResult, rolesResult] = await Promise.all([
+        listDocuments({ includeDeleted: false }),
+        listRoles(),
+      ]);
+      setDocuments(documentsResult.items);
+      setRoles(rolesResult);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load documents.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useEffect(() => {
     const handleClickOutside = () => setOpenPopoverId(null);
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  const filteredDocuments = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return documents.filter((doc) => {
+      if (statusFilter !== 'all' && doc.status !== statusFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return (
+        doc.filename.toLowerCase().includes(normalizedSearch) ||
+        doc.file_hash.toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [documents, searchTerm, statusFilter]);
+
+  const openPermissionsPopover = (document: DocumentRecord, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setOpenPopoverId((current) => (current === document.id ? null : document.id));
+    setDraftRoleIds(document.role_ids);
+  };
+
+  const toggleDraftRole = (roleId: string) => {
+    setDraftRoleIds((prev) =>
+      prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId],
+    );
+  };
+
+  const savePermissions = async () => {
+    if (!openPopoverId || draftRoleIds.length === 0) {
+      return;
+    }
+
+    setSavingPermissions(true);
+    try {
+      const updated = await updateDocumentPermissions(openPopoverId, draftRoleIds);
+      setDocuments((prev) => prev.map((doc) => (doc.id === updated.id ? updated : doc)));
+      setOpenPopoverId(null);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to update permissions.');
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+
+  const handleRetry = async (documentId: string) => {
+    setRetryingId(documentId);
+    try {
+      await retryDocumentIngestion(documentId);
+      await loadData();
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : 'Failed to retry ingestion.');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleDelete = async (documentId: string) => {
+    setDeletingId(documentId);
+    try {
+      await deleteDocument(documentId);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete document.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <section className="space-y-4 mb-12">
-      {/* Search & Filters */}
       <div className="bg-surface-container-low p-4 rounded-2xl flex flex-wrap items-center gap-4 shadow-sm border border-outline-variant/10">
         <div className="flex-1 min-w-[300px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-4 h-4" />
-          <input 
-            className="w-full bg-surface-container-lowest border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/5 focus:outline-none shadow-sm transition-all" 
-            placeholder="Search by Document Name or Code..." 
-            type="text" 
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="w-full bg-surface-container-lowest border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/5 focus:outline-none shadow-sm transition-all"
+            placeholder="Search by file name or hash..."
+            type="text"
           />
         </div>
+
         <div className="flex gap-3 items-center">
-          <select className="bg-surface-container-lowest border-none rounded-xl text-sm font-medium py-2.5 px-4 focus:ring-2 focus:ring-primary/5 focus:outline-none shadow-sm min-w-[120px]">
-            <option>Format: All</option>
-            <option>PDF</option>
-            <option>DOCX</option>
-            <option>JSON</option>
-          </select>
-          <select className="bg-surface-container-lowest border-none rounded-xl text-sm font-medium py-2.5 px-4 focus:ring-2 focus:ring-primary/5 focus:outline-none shadow-sm min-w-[120px]">
-            <option>Status: All</option>
-            <option>Indexed</option>
-            <option>Processing</option>
-            <option>Pending</option>
-            <option>Failed</option>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as 'all' | DocumentStatus)}
+            className="bg-surface-container-lowest border-none rounded-xl text-sm font-medium py-2.5 px-4 focus:ring-2 focus:ring-primary/5 focus:outline-none shadow-sm min-w-[120px]"
+          >
+            <option value="all">Status: All</option>
+            <option value="ready">Indexed</option>
+            <option value="processing">Processing</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
           </select>
           <button className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl flex items-center gap-2 text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm">
             <Filter className="w-4 h-4" />
             Filters
           </button>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl flex items-center gap-2 text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Table Container */}
       <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-slate-200 overflow-visible">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h3 className="font-headline font-bold text-on-surface">Document Index Registry</h3>
           <div className="flex gap-2">
             <button className="p-2 rounded-lg hover:bg-surface-container-low transition-colors text-outline">
-              <Download className="w-5 h-5" />
+              <Eye className="w-5 h-5" />
             </button>
             <button className="p-2 rounded-lg hover:bg-surface-container-low transition-colors text-outline">
               <Settings className="w-5 h-5" />
@@ -117,153 +265,179 @@ export function DocumentTable() {
           </div>
         </div>
 
+        {error && <p className="px-6 pt-4 text-sm text-error">{error}</p>}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider border-r border-slate-200/60 last:border-0">Document Name</th>
-                <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider border-r border-slate-200/60 last:border-0">Process Code</th>
-                <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider border-r border-slate-200/60 last:border-0">V. Effective</th>
+                <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider border-r border-slate-200/60 last:border-0">Effective Date</th>
                 <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider border-r border-slate-200/60 last:border-0">Allowed Roles</th>
                 <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider border-r border-slate-200/60 last:border-0">Status</th>
                 <th className="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-6 py-4 border-r border-slate-100 last:border-0">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded flex items-center justify-center ${
-                        doc.type.includes('PDF') ? 'bg-red-50 text-red-500' : 
-                        doc.type.includes('Word') ? 'bg-blue-50 text-blue-500' : 
-                        'bg-yellow-50 text-yellow-600'
-                      }`}>
-                        {doc.type.includes('PDF') ? <FileText className="w-4 h-4" /> : 
-                         doc.type.includes('Word') ? <File className="w-4 h-4" /> : 
-                         <Database className="w-4 h-4" />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-on-surface">{doc.name}</p>
-                        <p className="text-[10px] text-outline">{doc.type} • {doc.size}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 border-r border-slate-100 last:border-0">
-                    <span className="px-2 py-1 bg-primary-fixed text-on-primary-fixed text-[10px] font-extrabold rounded-md uppercase">
-                      {doc.processCode}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 border-r border-slate-100 last:border-0">
-                    <div className="text-[11px]">
-                      <p className="font-bold text-on-surface">{doc.version}</p>
-                      <p className="text-outline">{doc.effectiveDate}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 border-r border-slate-100 last:border-0 relative">
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <button 
-                        className="w-full flex flex-wrap gap-1 p-1 bg-surface-container-low border border-slate-200 rounded-lg hover:border-primary/30 transition-all text-left items-start content-start max-h-[60px] overflow-y-auto"
-                        onClick={(e) => togglePopover(doc.id, e)}
-                      >
-                        {doc.roles.map(role => (
-                          <span key={role} className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded shrink-0">
-                            {role}
-                          </span>
-                        ))}
-                        <Edit2 className="w-3.5 h-3.5 ml-auto mt-0.5 text-outline shrink-0" />
-                      </button>
-
-                      {/* Permission Popover */}
-                      {openPopoverId === doc.id && (
-                        <div className="absolute left-0 top-full mt-2 z-[60] w-48 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 space-y-3 animate-in fade-in zoom-in duration-200">
-                          <p className="text-[10px] font-bold text-outline uppercase tracking-widest">Update Permissions</p>
-                          <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                            {['Admin', 'Manager', 'Viewer', 'Legal', 'DevOps'].map(role => (
-                              <label key={role} className="flex items-center gap-2 cursor-pointer">
-                                <input 
-                                  type="checkbox" 
-                                  defaultChecked={doc.roles.includes(role)}
-                                  className="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary shrink-0" 
-                                />
-                                <span className="text-xs font-medium text-on-surface">{role}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <div className="flex gap-2 pt-2 border-t border-slate-100">
-                            <button 
-                              className="flex-1 py-1.5 bg-primary text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-all"
-                              onClick={() => setOpenPopoverId(null)}
-                            >
-                              Save
-                            </button>
-                            <button 
-                              className="flex-1 py-1.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-slate-200 transition-colors"
-                              onClick={() => setOpenPopoverId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 border-r border-slate-100 last:border-0">
-                    {doc.status === 'indexed' && (
-                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-extrabold rounded-full uppercase flex items-center w-fit gap-1">
-                        <span className="w-1 h-1 rounded-full bg-emerald-500"></span> Indexed
-                      </span>
-                    )}
-                    {doc.status === 'chunking' && (
-                      <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-extrabold rounded-full uppercase flex items-center w-fit gap-1">
-                        <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span> Chunking
-                      </span>
-                    )}
-                    {doc.status === 'failed' && (
-                      <span className="px-2 py-1 bg-error-container/20 text-error text-[10px] font-extrabold rounded-full uppercase flex items-center w-fit gap-1">
-                        <span className="w-1 h-1 rounded-full bg-error"></span> Failed
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {doc.status !== 'failed' ? (
-                        <>
-                          <button className="p-2 hover:bg-slate-100 rounded-lg text-outline"><Eye className="w-4 h-4" /></button>
-                          <button className="p-2 hover:bg-slate-100 rounded-lg text-outline"><RefreshCw className="w-4 h-4" /></button>
-                        </>
-                      ) : (
-                        <>
-                          <button className="p-2 hover:bg-slate-100 rounded-lg text-outline"><AlertTriangle className="w-4 h-4" /></button>
-                          <button className="p-2 hover:bg-slate-100 rounded-lg text-outline"><RefreshCw className="w-4 h-4" /></button>
-                        </>
-                      )}
-                      <button className="p-2 hover:bg-error-container/10 text-error rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                    </div>
+              {!loading && filteredDocuments.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-sm text-outline text-center">
+                    No documents found.
                   </td>
                 </tr>
-              ))}
+              )}
+
+              {filteredDocuments.map((doc) => {
+                const typeLabel = resolveTypeLabel(doc);
+                const effectiveDateLabel = doc.effective_date
+                  ? new Date(doc.effective_date).toLocaleDateString()
+                  : 'N/A';
+
+                return (
+                  <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-4 border-r border-slate-100 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-8 h-8 rounded flex items-center justify-center ${
+                            typeLabel.includes('PDF')
+                              ? 'bg-red-50 text-red-500'
+                              : typeLabel.includes('Word')
+                                ? 'bg-blue-50 text-blue-500'
+                                : 'bg-yellow-50 text-yellow-600'
+                          }`}
+                        >
+                          {typeLabel.includes('PDF') ? (
+                            <FileText className="w-4 h-4" />
+                          ) : typeLabel.includes('Word') ? (
+                            <File className="w-4 h-4" />
+                          ) : (
+                            <Database className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-on-surface truncate">{doc.filename}</p>
+                          <p className="text-[10px] text-outline">
+                            {typeLabel} • {formatFileSize(doc.file_size_bytes)}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 border-r border-slate-100 last:border-0">
+                      <div className="text-[11px]">
+                        <p className="font-bold text-on-surface">{effectiveDateLabel}</p>
+                        <p className="text-outline">Created {new Date(doc.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 border-r border-slate-100 last:border-0 relative">
+                      <div className="relative" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          className="w-full flex flex-wrap gap-1 p-1 bg-surface-container-low border border-slate-200 rounded-lg hover:border-primary/30 transition-all text-left items-start content-start max-h-[60px] overflow-y-auto"
+                          onClick={(event) => openPermissionsPopover(doc, event)}
+                        >
+                          {doc.role_ids.map((roleId) => (
+                            <span key={roleId} className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded shrink-0">
+                              {roleNameById[roleId] || roleId.slice(0, 8)}
+                            </span>
+                          ))}
+                          <Edit2 className="w-3.5 h-3.5 ml-auto mt-0.5 text-outline shrink-0" />
+                        </button>
+
+                        {openPopoverId === doc.id && (
+                          <div className="absolute left-0 top-full mt-2 z-[60] w-56 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 space-y-3 animate-in fade-in zoom-in duration-200">
+                            <p className="text-[10px] font-bold text-outline uppercase tracking-widest">
+                              Update Permissions
+                            </p>
+                            <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                              {roles.map((role) => (
+                                <label key={role.id} className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={draftRoleIds.includes(role.id)}
+                                    onChange={() => toggleDraftRole(role.id)}
+                                    className="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary shrink-0"
+                                  />
+                                  <span className="text-xs font-medium text-on-surface">{role.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <div className="flex gap-2 pt-2 border-t border-slate-100">
+                              <button
+                                className="flex-1 py-1.5 bg-primary text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
+                                onClick={() => void savePermissions()}
+                                disabled={savingPermissions || draftRoleIds.length === 0}
+                              >
+                                {savingPermissions ? 'Saving...' : 'Save'}
+                              </button>
+                              <button
+                                className="flex-1 py-1.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                                onClick={() => setOpenPopoverId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 border-r border-slate-100 last:border-0">
+                      <span
+                        className={`px-2 py-1 text-[10px] font-extrabold rounded-full uppercase flex items-center w-fit gap-1 ${statusBadgeClass(doc.status)}`}
+                      >
+                        <span className="w-1 h-1 rounded-full bg-current"></span>
+                        {resolveStatusLabel(doc.status)}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {doc.status === 'failed' ? (
+                          <button
+                            className="p-2 hover:bg-slate-100 rounded-lg text-outline disabled:opacity-50"
+                            onClick={() => void handleRetry(doc.id)}
+                            disabled={retryingId === doc.id}
+                            title="Retry ingestion"
+                          >
+                            {retryingId === doc.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <button className="p-2 hover:bg-slate-100 rounded-lg text-outline" title="View document details">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        <button
+                          className="p-2 hover:bg-error-container/10 text-error rounded-lg disabled:opacity-50"
+                          onClick={() => void handleDelete(doc.id)}
+                          disabled={deletingId === doc.id}
+                          title="Soft delete document"
+                        >
+                          {deletingId === doc.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="p-6 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-6 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between gap-4">
           <p className="text-sm text-outline font-medium">
-            Showing <span className="text-on-surface font-bold">1-3</span> of <span className="text-on-surface font-bold">1,245</span> documents
+            Showing <span className="text-on-surface font-bold">{filteredDocuments.length}</span> of{' '}
+            <span className="text-on-surface font-bold">{documents.length}</span> documents
           </p>
-          <div className="flex items-center gap-2">
-            <button className="p-2 px-3 text-sm font-bold text-outline hover:text-on-surface hover:bg-white border border-slate-200 rounded-lg transition-all flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-              <ChevronLeft className="w-4 h-4" /> Prev
-            </button>
-            <div className="flex items-center gap-1">
-              <button className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-sm shadow-md">1</button>
-              <button className="w-9 h-9 flex items-center justify-center rounded-lg text-outline hover:text-on-surface hover:bg-white font-bold text-sm border border-transparent hover:border-slate-200 transition-all">2</button>
-            </div>
-            <button className="p-2 px-3 text-sm font-bold text-outline hover:text-on-surface hover:bg-white border border-slate-200 rounded-lg transition-all flex items-center gap-1">
-              Next <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </div>
     </section>

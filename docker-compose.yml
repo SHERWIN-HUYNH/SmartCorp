@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   qdrant:
     image: qdrant/qdrant:v1.13.2
     restart: unless-stopped
@@ -26,6 +37,8 @@ services:
       QDRANT_HOST: http://qdrant:6333
       CORS_ORIGINS: http://localhost:3000
     depends_on:
+      redis:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
     healthcheck:
@@ -37,6 +50,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  worker:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env.docker
+    environment:
+      QDRANT_HOST: http://qdrant:6333
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app.celery_app",
+        "worker",
+        "--loglevel=info",
+        "-Q",
+        "ingestion",
+      ]
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
 
   client:
     build:

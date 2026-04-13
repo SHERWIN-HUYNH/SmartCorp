@@ -4,14 +4,21 @@ import { PlusCircle, ChevronRight, Users, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
+
+import { CreateRoleModal } from './create-role/CreateRoleModal';
 
 interface RoleListProps {
   roles: RoleNode[];
   selectedRoleId: string;
   onSelectRole: (id: string) => void;
+  onCreateRole: (payload: { name: string; description?: string }) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function RoleList({ roles, selectedRoleId, onSelectRole }: RoleListProps) {
+export function RoleList({ roles, selectedRoleId, onSelectRole, onCreateRole, isLoading = false }: RoleListProps) {
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
   // Group roles by category
   const groupedRoles = roles.reduce((acc, role) => {
     if (!acc[role.category]) {
@@ -22,7 +29,7 @@ export function RoleList({ roles, selectedRoleId, onSelectRole }: RoleListProps)
   }, {} as Record<string, RoleNode[]>);
 
   return (
-    <section className="w-[40%] flex flex-col bg-slate-50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-800">
+    <section className="w-full min-w-0 flex flex-col bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 lg:border-b-0 lg:border-r">
       <div className="p-6 pb-4 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="font-extrabold text-2xl tracking-tight text-slate-900 dark:text-white">Role Hierarchy</h2>
@@ -30,9 +37,14 @@ export function RoleList({ roles, selectedRoleId, onSelectRole }: RoleListProps)
             {roles.length} ROLES
           </Badge>
         </div>
-        <Button className="w-full py-6 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-3 shadow-md transition-all">
+        <Button
+          type="button"
+          disabled={isLoading}
+          onClick={() => setIsCreateModalOpen(true)}
+          className="w-full py-6 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-3 shadow-md transition-all disabled:opacity-60"
+        >
           <PlusCircle className="w-5 h-5" />
-          <span>Create New Role</span>
+          <span>{isLoading ? 'Working...' : 'Create New Role'}</span>
         </Button>
       </div>
 
@@ -78,6 +90,13 @@ export function RoleList({ roles, selectedRoleId, onSelectRole }: RoleListProps)
           ))}
         </div>
       </ScrollArea>
+
+      <CreateRoleModal
+        open={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={onCreateRole}
+        isSubmitting={isLoading}
+      />
     </section>
   );
 }

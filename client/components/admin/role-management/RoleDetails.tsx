@@ -11,14 +11,17 @@ import { useState } from 'react';
 
 interface RoleDetailsProps {
   role: RoleNode | null;
+  onUpdateRole: (roleId: string, payload: { title?: string; description?: string }) => void;
+  onDeleteRole: (roleId: string) => void;
+  isMutating?: boolean;
 }
 
-export function RoleDetails({ role }: RoleDetailsProps) {
+export function RoleDetails({ role, onUpdateRole, onDeleteRole, isMutating = false }: RoleDetailsProps) {
   const [activeTab, setActiveTab] = useState<'users' | 'documents'>('users');
 
   if (!role) {
     return (
-      <section className="w-[60%] flex flex-col bg-white dark:bg-slate-950 items-center justify-center text-slate-500">
+      <section className="w-full min-w-0 flex flex-col bg-white dark:bg-slate-950 items-center justify-center text-slate-500">
         <p>Select a role to view details</p>
       </section>
     );
@@ -34,7 +37,7 @@ export function RoleDetails({ role }: RoleDetailsProps) {
   };
 
   return (
-    <section className="w-[60%] flex flex-col bg-white dark:bg-slate-950 overflow-y-auto">
+    <section className="w-full min-w-0 flex flex-col bg-white dark:bg-slate-950 overflow-y-auto">
       {/* Detailed Header */}
       <div className="p-10 pb-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex justify-between items-start mb-6">
@@ -51,10 +54,44 @@ export function RoleDetails({ role }: RoleDetailsProps) {
               {role.description}
             </p>
           </div>
-          <Button variant="secondary" className="px-6 py-5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-            <Edit2 className="w-4 h-4" />
-            <span>Edit Role</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              disabled={isMutating}
+              onClick={() => {
+                const nextTitle = window.prompt('Update role name', role.title);
+                if (!nextTitle) {
+                  return;
+                }
+
+                const nextDescription = window.prompt('Update role description', role.description || '');
+                onUpdateRole(role.id, {
+                  title: nextTitle,
+                  description: nextDescription ?? role.description,
+                });
+              }}
+              variant="secondary"
+              className="px-6 py-5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span>{isMutating ? 'Saving...' : 'Edit Role'}</span>
+            </Button>
+            <Button
+              type="button"
+              disabled={isMutating || role.isCore}
+              onClick={() => {
+                const confirmed = window.confirm(`Delete role ${role.title}?`);
+                if (!confirmed) {
+                  return;
+                }
+                onDeleteRole(role.id);
+              }}
+              variant="secondary"
+              className="px-6 py-5 bg-red-50 text-red-700 rounded-xl font-bold hover:bg-red-100 transition-colors disabled:opacity-60"
+            >
+              Delete Role
+            </Button>
+          </div>
         </div>
 
         {/* Detail Tabs */}
