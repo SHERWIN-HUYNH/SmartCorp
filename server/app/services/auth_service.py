@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.model.role import Role
 from app.model.user import User
 from app.schemas.user import SignupRequest
 
@@ -62,10 +63,13 @@ def get_user_by_email(email: str, db: Session) -> User | None:
 
 
 def create_user(user_data: SignupRequest, db: Session) -> User:
+    default_role = db.query(Role).filter(Role.name == "user").first()
     user = User(
         email=user_data.email,
         name=user_data.name,
         password_hash=get_password_hash(user_data.password),
+        role="user",
+        role_id=default_role.id if default_role else None,
     )
     db.add(user)
     db.commit()
