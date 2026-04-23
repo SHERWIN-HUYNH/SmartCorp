@@ -95,3 +95,15 @@ class QdrantService:
 
     def create_payload_index(self, field_name: str, field_type: str = "keyword"):
         return self.qdrant.create_payload_index(field_name, field_type)
+
+    def update_document_role_allowed(
+        self,
+        document_id: str,
+        role_allowed: List[str],
+        timeout_seconds: Optional[float] = None,
+    ):
+        return self.qdrant.set_role_allowed_for_document(
+            document_id=document_id,
+            role_allowed=role_allowed,
+            timeout_seconds=timeout_seconds,
+        )

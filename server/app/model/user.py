@@ -29,3 +29,4 @@ class User(Base):
 
     role_ref = relationship("Role", back_populates="users")
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
+    document_memberships = relationship("DocumentMembership", back_populates="user", cascade="all, delete-orphan")

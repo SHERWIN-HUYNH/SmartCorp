@@ -42,13 +42,8 @@ class IngestionService:
             int(effective_date.timestamp()) if effective_date is not None else upload_date
         )
 
-        try:
-            dense_embeddings = self.embedding.embed_dense(texts)
-            sparse_embeddings = self.embedding.embed_sparse(texts)
-        except Exception as e:
-            if self.verbose:
-                print(f"Embedding pipeline failed: {e}")
-            return
+        dense_embeddings = self.embedding.embed_dense(texts)
+        sparse_embeddings = self.embedding.embed_sparse(texts)
 
         points = []
         for i, chunk in enumerate(all_chunks):
@@ -77,12 +72,8 @@ class IngestionService:
 
             points.append(point)
 
-        try:
-            self.qdrant.upsert_points(points)
-            if self.verbose:
-                print(f"Inserted {len(points)} points")
-        except Exception as e:
-            if self.verbose:
-                print(f"Qdrant insert failed: {e}")
+        self.qdrant.upsert_points(points)
+        if self.verbose:
+            print(f"Inserted {len(points)} points")
 
         return all_chunks
