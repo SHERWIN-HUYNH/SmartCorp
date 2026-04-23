@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 DocumentStatus = Literal["pending", "processing", "ready", "failed", "deleted"]
@@ -39,10 +39,19 @@ class DocumentUploadResponse(BaseModel):
 
 
 class ConfirmDocumentUploadRequest(BaseModel):
-    upload_token: str
+    upload_token: str | None = None
+    file_hash: str | None = None
     role_ids: list[UUID] = Field(min_length=1)
     effective_date: datetime | None = None
     client_file_hash: str | None = None
+
+    @model_validator(mode="after")
+    def validate_upload_identifier(self) -> "ConfirmDocumentUploadRequest":
+        if not self.upload_token and not self.file_hash:
+            raise ValueError("Either upload_token or file_hash is required")
+        if self.file_hash:
+            self.file_hash = self.file_hash.strip().lower()
+        return self
 
 
 class DocumentResponse(BaseModel):
@@ -65,11 +74,14 @@ class ConfirmDocumentUploadResponse(BaseModel):
     message: str
     document: DocumentResponse
     task_id: str | None = None
+    merged: bool = False
+    qdrant_sync_queued: bool = False
 
 
 class DocumentListResponse(BaseModel):
     items: list[DocumentResponse]
     total: int
+    total_count: int
 
 
 class QueueDocumentResponse(BaseModel):

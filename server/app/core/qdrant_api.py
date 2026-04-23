@@ -179,3 +179,31 @@ class QdrantAPI:
     def delete_payload_index(self, field_name: str):
         url = f"{self.host}/collections/{self.collection}/index/{field_name}"
         return requests.delete(url).json()
+
+    def set_role_allowed_for_document(
+        self,
+        document_id: str,
+        role_allowed: List[str],
+        timeout_seconds: Optional[float] = None,
+    ):
+        url = f"{self.host}/collections/{self.collection}/points/payload"
+
+        payload = {
+            "payload": {
+                "role_allowed": role_allowed,
+            },
+            "filter": {
+                "must": [
+                    {
+                        "key": "document_id",
+                        "match": {"value": document_id},
+                    }
+                ]
+            },
+        }
+
+        request_kwargs: dict = {"json": payload}
+        if timeout_seconds is not None:
+            request_kwargs["timeout"] = timeout_seconds
+
+        return requests.post(url, **request_kwargs).json()

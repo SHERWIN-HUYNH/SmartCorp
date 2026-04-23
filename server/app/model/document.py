@@ -30,6 +30,7 @@ class Document(Base):
 
     user = relationship("User", back_populates="documents")
     permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
+    memberships = relationship("DocumentMembership", back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint(
@@ -39,8 +40,28 @@ class Document(Base):
         Index("idx_documents_user_status", "user_id", "status"),
         Index("idx_documents_effective_date", "effective_date"),
         Index(
-            "uq_documents_user_hash_active",
+            "idx_documents_active_created_id",
+            "created_at",
+            "id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_documents_user_active_created_id",
             "user_id",
+            "created_at",
+            "id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_documents_user_status_active_created_id",
+            "user_id",
+            "status",
+            "created_at",
+            "id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_documents_file_hash_active",
             "file_hash",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
