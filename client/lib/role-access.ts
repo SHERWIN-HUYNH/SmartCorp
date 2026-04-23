@@ -42,10 +42,11 @@ export function isRoleInAllowlist(role: string | null | undefined): boolean {
   if (!normalizedRole) {
     return false;
   }
-
+  console.log('Checking if role is in allowlist:', normalizedRole);
   return getRoleManagerAllowlist().includes(normalizedRole);
 }
 
 export function getLandingPathForRole(role: string | null | undefined): '/admin' | '/chatbot' {
+  console.log('Determining landing path for role:', role);
   return isRoleInAllowlist(role) ? '/admin' : '/chatbot';
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, File, FileText, RefreshCw, X } from 'lucide-react';
 
 import { getProcessingQueue, type ProcessingQueueItem } from '@/lib/auth-api';
@@ -19,6 +19,8 @@ interface QueueItemData {
   activeSteps: string[];
   errorMessage?: string;
 }
+
+const POLL_DELAYS_MS = [5000, 10000, 20000] as const;
 
 function formatFileSize(bytes?: number | null): string {
   if (!bytes || bytes <= 0) {
@@ -103,6 +105,8 @@ export function ProcessingQueue() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pollStep, setPollStep] = useState(0);
+  const pollingTimeoutRef = useRef<number | null>(null);
 
   const loadQueue = useCallback(async (silent = false) => {
     if (!silent) {
@@ -113,7 +117,15 @@ export function ProcessingQueue() {
 
     try {
       const queue = await getProcessingQueue();
-      setQueueItems(queue.items.map(mapQueueItem));
+      const mappedItems = queue.items.map(mapQueueItem);
+      setQueueItems(mappedItems);
+
+      setPollStep((prev) => {
+        if (mappedItems.length > 0) {
+          return 0;
+        }
+        return Math.min(prev + 1, POLL_DELAYS_MS.length - 1);
+      });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load processing queue.');
     } finally {
@@ -125,15 +137,55 @@ export function ProcessingQueue() {
   useEffect(() => {
     void loadQueue();
 
-    const pollingTimer = window.setInterval(() => {
-      void loadQueue(true);
-    }, 8000);
+    return () => {
+      if (pollingTimeoutRef.current) {
+        window.clearTimeout(pollingTimeoutRef.current);
+      }
+    };
+  }, [loadQueue]);
 
-    return () => window.clearInterval(pollingTimer);
+  useEffect(() => {
+    if (pollingTimeoutRef.current) {
+      window.clearTimeout(pollingTimeoutRef.current);
+      pollingTimeoutRef.current = null;
+    }
+
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
+
+    pollingTimeoutRef.current = window.setTimeout(() => {
+      void loadQueue(true);
+    }, POLL_DELAYS_MS[pollStep]);
+
+    return () => {
+      if (pollingTimeoutRef.current) {
+        window.clearTimeout(pollingTimeoutRef.current);
+      }
+    };
+  }, [loadQueue, pollStep]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setPollStep(0);
+        void loadQueue(true);
+        return;
+      }
+
+      if (pollingTimeoutRef.current) {
+        window.clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [loadQueue]);
 
   const handleRefresh = () => {
     setRefreshing(true);
+    setPollStep(0);
     void loadQueue(true);
   };
 

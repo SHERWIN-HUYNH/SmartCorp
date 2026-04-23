@@ -88,13 +88,18 @@ function statusBadgeClass(status: DocumentStatus): string {
   return 'bg-slate-200 text-slate-600';
 }
 
+const PAGE_SIZE = 20;
+
 export function DocumentTable() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | DocumentStatus>('all');
 
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
@@ -111,52 +116,82 @@ export function DocumentTable() {
     return map;
   }, [roles]);
 
-  const loadData = useCallback(async () => {
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  }, [totalCount]);
+
+  const pageRange = useMemo(() => {
+    if (totalCount === 0) {
+      return { start: 0, end: 0 };
+    }
+
+    const start = (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(start + documents.length - 1, totalCount);
+    return { start, end };
+  }, [documents.length, page, totalCount]);
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const rolesResult = await listRoles();
+      setRoles(rolesResult);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load roles.');
+    }
+  }, []);
+
+  const loadDocuments = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [documentsResult, rolesResult] = await Promise.all([
-        listDocuments({ includeDeleted: false }),
-        listRoles(),
-      ]);
+      const documentsResult = await listDocuments({
+        includeDeleted: false,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: debouncedSearchTerm || undefined,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+      });
+
+      const resolvedTotal = documentsResult.total_count ?? documentsResult.total;
       setDocuments(documentsResult.items);
-      setRoles(rolesResult);
+      setTotalCount(resolvedTotal);
+
+      const maxPage = Math.max(1, Math.ceil(resolvedTotal / PAGE_SIZE));
+      if (page > maxPage) {
+        setPage(maxPage);
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load documents.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearchTerm, page, statusFilter]);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchTerm, statusFilter]);
+
+  useEffect(() => {
+    void loadRoles();
+  }, [loadRoles]);
+
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
 
   useEffect(() => {
     const handleClickOutside = () => setOpenPopoverId(null);
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
-
-  const filteredDocuments = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    return documents.filter((doc) => {
-      if (statusFilter !== 'all' && doc.status !== statusFilter) {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return (
-        doc.filename.toLowerCase().includes(normalizedSearch) ||
-        doc.file_hash.toLowerCase().includes(normalizedSearch)
-      );
-    });
-  }, [documents, searchTerm, statusFilter]);
 
   const openPermissionsPopover = (document: DocumentRecord, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -191,7 +226,7 @@ export function DocumentTable() {
     setRetryingId(documentId);
     try {
       await retryDocumentIngestion(documentId);
-      await loadData();
+      await loadDocuments();
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : 'Failed to retry ingestion.');
     } finally {
@@ -203,7 +238,7 @@ export function DocumentTable() {
     setDeletingId(documentId);
     try {
       await deleteDocument(documentId);
-      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      await loadDocuments();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete document.');
     } finally {
@@ -243,7 +278,7 @@ export function DocumentTable() {
           </button>
           <button
             type="button"
-            onClick={() => void loadData()}
+            onClick={() => void loadDocuments()}
             className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl flex items-center gap-2 text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -279,7 +314,15 @@ export function DocumentTable() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {!loading && filteredDocuments.length === 0 && (
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-sm text-outline text-center">
+                    Loading documents...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && documents.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-sm text-outline text-center">
                     No documents found.
@@ -287,7 +330,7 @@ export function DocumentTable() {
                 </tr>
               )}
 
-              {filteredDocuments.map((doc) => {
+              {!loading && documents.map((doc) => {
                 const typeLabel = resolveTypeLabel(doc);
                 const effectiveDateLabel = doc.effective_date
                   ? new Date(doc.effective_date).toLocaleDateString()
@@ -295,7 +338,7 @@ export function DocumentTable() {
 
                 return (
                   <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-4 border-r border-slate-100 last:border-0">
+                    <td className="px-6 py-4 border-r border-slate-100 last:border-0 max-w-[320px] w-[320px]">
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-8 h-8 rounded flex items-center justify-center ${
@@ -314,8 +357,8 @@ export function DocumentTable() {
                             <Database className="w-4 h-4" />
                           )}
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-on-surface truncate">{doc.filename}</p>
+                        <div className="min-w-0 max-w-[240px] w-[240px]">
+                          <p className="text-sm font-bold text-on-surface truncate" title={doc.filename}>{doc.filename}</p>
                           <p className="text-[10px] text-outline">
                             {typeLabel} • {formatFileSize(doc.file_size_bytes)}
                           </p>
@@ -435,9 +478,34 @@ export function DocumentTable() {
 
         <div className="p-6 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between gap-4">
           <p className="text-sm text-outline font-medium">
-            Showing <span className="text-on-surface font-bold">{filteredDocuments.length}</span> of{' '}
-            <span className="text-on-surface font-bold">{documents.length}</span> documents
+            Showing <span className="text-on-surface font-bold">{pageRange.start}</span>
+            {' - '}
+            <span className="text-on-surface font-bold">{pageRange.end}</span> of{' '}
+            <span className="text-on-surface font-bold">{totalCount}</span> documents
           </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={loading || page <= 1}
+              className="px-3 py-1.5 bg-surface-container-lowest border border-outline-variant/30 rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-container-low transition-colors"
+            >
+              Previous
+            </button>
+            <p className="text-sm text-outline">
+              Page <span className="font-bold text-on-surface">{page}</span> /{' '}
+              <span className="font-bold text-on-surface">{totalPages}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={loading || page >= totalPages}
+              className="px-3 py-1.5 bg-surface-container-lowest border border-outline-variant/30 rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-container-low transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </section>

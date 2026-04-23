@@ -133,6 +133,8 @@ export interface DocumentUploadResponse {
 export interface ConfirmDocumentUploadResponse {
   message: string;
   task_id?: string | null;
+  merged?: boolean;
+  qdrant_sync_queued?: boolean;
   document: {
     id: string;
     filename: string;
@@ -161,6 +163,7 @@ export interface DocumentRecord {
 export interface DocumentsListResponse {
   items: DocumentRecord[];
   total: number;
+  total_count?: number;
 }
 
 export interface DocumentStatsResponse {
@@ -541,6 +544,9 @@ export async function getProcessingQueue(includeFailed = false): Promise<Process
 export async function listDocuments(options?: {
   status?: DocumentStatus;
   includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+  search?: string;
 }): Promise<DocumentsListResponse> {
   const query = new URLSearchParams();
   if (options?.status) {
@@ -548,6 +554,15 @@ export async function listDocuments(options?: {
   }
   if (options?.includeDeleted) {
     query.set('include_deleted', 'true');
+  }
+  if (typeof options?.limit === 'number') {
+    query.set('limit', String(options.limit));
+  }
+  if (typeof options?.offset === 'number') {
+    query.set('offset', String(options.offset));
+  }
+  if (options?.search && options.search.trim()) {
+    query.set('search', options.search.trim());
   }
 
   const response = await fetch(`${API_BASE_URL}/documents${query.toString() ? `?${query.toString()}` : ''}`, {
@@ -676,11 +691,16 @@ export async function uploadDocumentFile(file: File): Promise<DocumentUploadResp
 }
 
 export async function confirmDocumentUpload(payload: {
-  uploadToken: string;
+  uploadToken?: string;
+  fileHash?: string;
   roleIds: string[];
   effectiveDate?: string;
   clientFileHash?: string;
 }): Promise<ConfirmDocumentUploadResponse> {
+  if (!payload.uploadToken && !payload.fileHash) {
+    throw new AuthApiError('Missing upload identifier.', 400);
+  }
+
   const response = await fetch(`${API_BASE_URL}/documents/confirm`, {
     method: 'POST',
     headers: {
@@ -688,7 +708,8 @@ export async function confirmDocumentUpload(payload: {
     },
     credentials: 'include',
     body: JSON.stringify({
-      upload_token: payload.uploadToken,
+      upload_token: payload.uploadToken || null,
+      file_hash: payload.fileHash || null,
       role_ids: payload.roleIds,
       effective_date: payload.effectiveDate || null,
       client_file_hash: payload.clientFileHash || null,
@@ -718,12 +739,21 @@ export async function uploadDocuments(payload: UploadDocumentsPayload): Promise<
       const precheck = await precheckDocument(fileHash);
 
       if (precheck.duplicate) {
+        const merged = await confirmDocumentUpload({
+          fileHash,
+          roleIds: payload.roleIds,
+          effectiveDate: payload.effectiveDate,
+          clientFileHash: fileHash,
+        });
+
+        uploaded += 1;
         duplicates += 1;
         items.push({
           filename: file.name,
-          status: 'duplicate',
-          detail: `Duplicate: ${precheck.existing_document?.filename || file.name}`,
-          documentId: precheck.existing_document?.id,
+          status: 'uploaded',
+          detail: merged.message,
+          documentId: merged.document.id,
+          taskId: merged.task_id || undefined,
         });
         continue;
       }
@@ -754,7 +784,7 @@ export async function uploadDocuments(payload: UploadDocumentsPayload): Promise<
     }
   }
 
-  const message = `Uploaded ${uploaded}, duplicates ${duplicates}, failed ${failed}.`;
+  const message = `Uploaded ${uploaded}, merged ${duplicates}, failed ${failed}.`;
   return {
     message,
     uploaded,

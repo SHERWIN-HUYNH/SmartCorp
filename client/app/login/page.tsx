@@ -28,6 +28,7 @@ export default function LoginPage() {
         return;
       }
       const response = await login(email, password);
+      console.log('Login successful. User role:', response.user.role);
       router.push(getLandingPathForRole(response.user.role));
     } catch (error) {
       if (error instanceof AuthApiError) {

@@ -25,6 +25,7 @@ services:
       retries: 10
 
   server:
+    image: smartcope-backend:local
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -35,7 +36,7 @@ services:
       - ./.env.docker
     environment:
       QDRANT_HOST: http://qdrant:6333
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
     depends_on:
       redis:
         condition: service_healthy
@@ -52,9 +53,7 @@ services:
       retries: 10
 
   worker:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    image: smartcope-backend:local
     restart: unless-stopped
     env_file:
       - ./.env.docker

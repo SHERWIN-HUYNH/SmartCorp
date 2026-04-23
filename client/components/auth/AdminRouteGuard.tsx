@@ -20,7 +20,7 @@ export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
     async function checkAccess() {
       try {
         const user = await getCurrentUser();
-
+        console.log('Current user role:', user.role);
         if (!isRoleInAllowlist(user.role)) {
           router.replace('/chatbot');
           return;
