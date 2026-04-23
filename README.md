@@ -137,7 +137,7 @@ celery -A app.core.celery_app.celery_app worker --loglevel=info -Q ingestion
 Nếu chạy local trên Windows và gặp lỗi `PermissionError: [WinError 5] Access is denied` từ `billiard/pool`, chạy worker với pool `solo`:
 ```bash
 cd server
-source smartcope/Scripts/activate
+source smartcope/Scripts/activate 
 celery -A app.core.celery_app.celery_app worker --loglevel=info -Q ingestion -P solo --concurrency=1
 ```
 
