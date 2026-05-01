@@ -7,3 +7,13 @@
 
 
 context/
+
+.specify/
+specs/
+
+# Speckit generated prompts/agents
+.github/agents/
+.github/prompts/
+.github/copilot-instructions.md
+
+.cursorignore

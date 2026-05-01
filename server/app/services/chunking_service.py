@@ -200,52 +200,39 @@ class ChunkingService:
         return content_data
 
 
-    def _create_ai_enhanced_summary(self, text: str, tables: List[str], images: List[str]) -> str:
+    def _create_media_description(self, text: str, tables: List[str], images: List[str]) -> str:
+        if not tables and not images:
+            return ""
+
         try:
             prompt_text = SearchableDescriptionPrompts.build_prompt_text(text, tables, images)
-
-            content = [
-                {
-                    "type": "input_text",
-                    "text": prompt_text
-                }
-            ]
+            content = [{"type": "input_text", "text": prompt_text}]
 
             for image_base64 in images:
-                content.append({
-                    "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{image_base64}"
-                })
+                content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{image_base64}",
+                    }
+                )
 
             response = self.client.responses.create(
                 model="gpt-4.1",
-                input=[
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                ],
-                temperature=0
+                input=[{"role": "user", "content": content}],
+                temperature=0,
             )
-
-            return response.output_text
-
+            return (response.output_text or "").strip()
         except Exception as e:
-            print(f"AI summary failed: {e}")
-            summary = f"{text[:300]}..."
-            if tables:
-                summary += f" [Contains {len(tables)} table(s)]"
-            if images:
-                summary += f" [Contains {len(images)} image(s)]"
-            return summary
-
+            if self.verbose:
+                print(f"Media description failed: {e}")
+            return ""
 
     def _summarise_chunks(self, chunks, document_id: Optional[str] = None):
         if self.verbose:
             print('Summary Chunks...')
 
         documents = []
-        
+
         for i, chunk in enumerate(chunks):
             content_data = self._separate_content_types(chunk)
             table_urls = self._upload_tables_to_cloudflare(
@@ -258,28 +245,26 @@ class ChunkingService:
                 i,
                 document_id=document_id,
             )
-            
-            
-            if content_data['tables'] or content_data['images']:
-                try:
-                    enhanced_content = self._create_ai_enhanced_summary(
-                        content_data['text'],
-                        content_data['tables'], 
-                        content_data['images']
-                    )
-                except Exception as e:
-                    print(f"AI summary failed: {e}")
-                    enhanced_content = content_data['text']
-            else:
-                enhanced_content = content_data['text']
-            
+
+            media_description = self._create_media_description(
+                content_data['text'],
+                content_data['tables'],
+                content_data['images'],
+            )
+
+            raw_text = content_data['text'] or ''
+            page_content = raw_text
+            if media_description:
+                page_content = f"{raw_text}\n\n[Media description]\n{media_description}".strip()
+
             doc = {
-                "page_content": enhanced_content,
+                "page_content": page_content,
                 "metadata": {
                     "original_content": json.dumps({
                         "type": content_data['types'],
                         "page": content_data['page_number'],
-                        "raw_text": content_data['text'],
+                        "raw_text": raw_text,
+                        "media_description": media_description,
                         "tables_html": content_data['tables'],
                         "images_base64": content_data['images'],
                         "table_urls": table_urls,
@@ -287,9 +272,9 @@ class ChunkingService:
                     })
                 }
             }
-            
+
             documents.append(doc)
-        
+
         print(f"Processed {len(documents)} chunks")
         return documents
 

@@ -107,7 +107,6 @@ def _release_distributed_slot(acquired: bool) -> None:
         if in_flight <= 0:
             client.delete(key)
     except RedisError:
-        # Best effort release; TTL handles stale counters on failures.
         pass
 
 
@@ -152,6 +151,10 @@ def _is_transient_db_error(exc: Exception) -> bool:
         "connection reset by peer",
         "could not receive data from server",
         "connection not open",
+        "ssl syscall",
+        "ssl syscall error",
+        "software caused connection abort",
+        "connection aborted",
     )
     return any(marker in text for marker in markers)
 
@@ -226,7 +229,6 @@ def _resolve_local_file_path(file_url: str) -> Path:
         raise ValueError("Not a local file URL")
 
     file_path = unquote(parsed.path or "")
-    # On Windows file:// URLs, parsed path looks like /C:/...
     if file_path.startswith("/") and len(file_path) >= 3 and file_path[2] == ":":
         file_path = file_path[1:]
 
@@ -248,7 +250,6 @@ def _download_to_temp_file(file_url: str) -> Path:
     except requests.RequestException as exc:
         primary_error = exc
 
-        # Fallback: if public URL fetch fails, try authenticated R2 object download.
         parsed = urlparse(file_url)
         object_key = unquote(parsed.path or "").lstrip("/")
         if not object_key:
@@ -302,7 +303,8 @@ def _build_ingestion_service() -> IngestionService:
     sparse_model = SparseTextEmbedding("Qdrant/bm25")
     qdrant_service = QdrantService(settings.QDRANT_HOST, settings.QDRANT_COLLECTION)
 
-    # Best effort index setup; no-op if already created.
+    qdrant_service.ensure_collection(vector_size=1536)
+
     for field_name, field_type in (
         ("role_allowed", "keyword"),
         ("document_id", "keyword"),
@@ -327,43 +329,54 @@ def _build_ingestion_service() -> IngestionService:
     default_retry_delay=30,
 )
 def process_document_ingestion(self, document_id: str):
-    db = SessionLocal()
     temp_file_path: Path | None = None
 
     try:
-        document = db.query(Document).filter(Document.id == document_id).first()
-        if not document:
-            return {"status": "not_found", "document_id": document_id}
+        read_db = SessionLocal()
+        try:
+            document = read_db.query(Document).filter(Document.id == document_id).first()
+            if not document:
+                return {"status": "not_found", "document_id": document_id}
 
-        role_allowed = [permission.role.name for permission in document.permissions if permission.role and permission.role.name]
-        if not role_allowed:
-            role_allowed = ["general"]
+            role_allowed = [
+                permission.role.name
+                for permission in document.permissions
+                if permission.role and permission.role.name
+            ]
+            if not role_allowed:
+                role_allowed = ["general"]
 
-        document.status = "processing"
-        document.error_message = None
-        db.add(document)
-        db.commit()
+            file_url = document.file_url
+            effective_date = document.effective_date
+
+            document.status = "processing"
+            document.error_message = None
+            read_db.add(document)
+            read_db.commit()
+        finally:
+            read_db.close()
 
         with _ingestion_capacity_guard():
-            input_file, should_cleanup = _resolve_input_file(document.file_url)
+            input_file, should_cleanup = _resolve_input_file(file_url)
             if should_cleanup:
                 temp_file_path = input_file
 
             ingestion_service = _build_ingestion_service()
             chunks = ingestion_service.ingest_pdf(
                 file_path=str(input_file),
-                document_id=str(document.id),
+                document_id=document_id,
                 role_allowed=role_allowed,
-                effective_date=document.effective_date,
+                effective_date=effective_date,
             )
 
         if chunks is None:
             raise RuntimeError("Ingestion pipeline returned no output")
 
-        document.status = "ready"
-        document.error_message = None
-        db.add(document)
-        db.commit()
+        _update_document_status(
+            document_id=document_id,
+            status="ready",
+            error_message=None,
+        )
 
         return {
             "status": "ready",
@@ -371,8 +384,6 @@ def process_document_ingestion(self, document_id: str):
             "chunks": len(chunks),
         }
     except Exception as exc:
-        db.rollback()
-
         error_text = str(exc)
         if _is_non_retryable_error(exc):
             _update_document_status(
@@ -415,7 +426,6 @@ def process_document_ingestion(self, document_id: str):
                 temp_file_path.unlink(missing_ok=True)
             except OSError:
                 pass
-        db.close()
 
 
 @celery_app.task(
