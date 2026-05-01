@@ -2,6 +2,7 @@ from enum import Enum
 from pydantic import BaseModel, model_validator, Field
 from datetime import datetime
 from typing import List, Optional
+import uuid
 
 
 class ChunkType(str, Enum):
@@ -82,7 +83,6 @@ class Point(BaseModel):
         role_allowed: Optional[List[str]] = None,
         upload_date: Optional[int] = None,
         effective_date: Optional[int] = None,
-        point_id: Optional[str] = None,
     ) -> "Point":
         if role_allowed is None:
             role_allowed = ["general"]
@@ -133,7 +133,7 @@ class Point(BaseModel):
         )
 
         return cls(
-            id=point_id or f"{document_id}:{payload.order}:{payload.page}",
+            id=str(uuid.uuid4()),
             vector=vector,
             payload=payload,
         )

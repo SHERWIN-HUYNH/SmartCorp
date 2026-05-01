@@ -68,9 +68,6 @@ services:
         "--loglevel=info",
         "-Q",
         "ingestion",
-        "--concurrency=2",
-        "--prefetch-multiplier=1",
-        "--max-tasks-per-child=10",
       ]
     depends_on:
       redis:
