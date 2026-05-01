@@ -17,12 +17,6 @@ class QdrantService:
     def create_collection(self, vector_size: int = 1536):
         return self.qdrant.create_collection(vector_size)
 
-    def ensure_collection(self, vector_size: int = 1536):
-        return self.qdrant.ensure_collection(vector_size)
-
-    def collection_exists(self) -> bool:
-        return self.qdrant.collection_exists()
-
     def delete_collection(self):
         return self.qdrant.delete_collection()
 
@@ -56,7 +50,6 @@ class QdrantService:
         role_allowed: Optional[List[str]] = None,
         upload_date: Optional[int] = None,
         effective_date: Optional[int] = None,
-        point_id: Optional[str] = None,
     ) -> Point:
         return Point.from_chunk(
             chunk=chunk,
@@ -67,7 +60,6 @@ class QdrantService:
             role_allowed=role_allowed,
             upload_date=upload_date,
             effective_date=effective_date,
-            point_id=point_id,
         )
 
     # -------- Search --------
