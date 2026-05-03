@@ -7,3 +7,9 @@
 
 
 context/
+
+specs/
+.specify/
+.github/
+
+.cursorignore
